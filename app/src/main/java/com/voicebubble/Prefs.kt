@@ -147,7 +147,15 @@ class Prefs(private val ctx: Context) {
     var persona: String?
         // "Shakespeare" from older versions is now Royal English.
         get() = p.getString("persona", null)?.let { if (it.equals("Shakespeare", ignoreCase = true)) Royal.NAME else it }
-        set(v) = p.edit().putString("persona", v?.trim()?.ifEmpty { null }).apply()
+        set(v) {
+            val who = v?.trim()?.ifEmpty { null }
+            p.edit().putString("persona", who).apply()
+            // Remembered for the bubble's character picker (newest first).
+            if (who != null) p.edit().putString("recentPersonas", (listOf(who) + recentPersonas.filter { it != who }).take(6).joinToString("\n")).apply()
+        }
+    /** Characters you used lately, newest first. */
+    val recentPersonas: List<String>
+        get() = p.getString("recentPersonas", "")!!.lines().filter { it.isNotBlank() }
     /** How long AI text should be: "" (as you said it), "short", "medium" or "long". */
     var aiLength: String
         get() = p.getString("aiLength", "")!!

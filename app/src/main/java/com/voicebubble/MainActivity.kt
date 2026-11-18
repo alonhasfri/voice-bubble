@@ -257,7 +257,7 @@ class MainActivity : Screen() {
             rows += Ui.switchRow(this, look.first, look.second, f.title, sub, Features.isOn(this, f)) { on -> Features.set(this, f, on) }
         }
         rows += Ui.row(this, R.drawable.ui_user, "orange", "Talk like", value = prefs.persona ?: "Off",
-            sub = if (prefs.persona != null && !Ai.hasKey(this)) "Needs an AI key (Settings → AI)" else "Rewrite everything you say in someone's voice") {
+            sub = if (prefs.persona != null && !Ai.hasKey(this)) "Needs an AI key (Settings → AI)" else "Rewrite everything you say in someone's voice. Quick switch: swipe down on the bubble") {
             pickPersona()
         }
         val langs = listOf("Off", "English", "Hebrew", "Spanish", "French", "German", "Italian", "Portuguese", "Arabic",
@@ -307,20 +307,7 @@ class MainActivity : Screen() {
 
     private fun pickPersona() {
         val prefs = Prefs(this)
-        val presets = listOf(
-            // Deltarune & Undertale
-            "Rouxls Kaard", "Spamton", "Jevil", "Sans", "Papyrus", "Undyne", "Alphys", "Mettaton", "Flowey",
-            "Toriel", "Asgore", "Temmie", "Susie", "Ralsei", "Lancer", "Berdly", "Noelle", "Tenna", "Queen",
-            // Jujutsu Kaisen
-            "Gojo", "Sukuna", "Yuji Itadori", "Megumi", "Nobara", "Nanami", "Todo", "Mahito", "Kenjaku", "Hakari",
-            // Other anime & games
-            "Goku", "Vegeta", "Naruto", "Luffy", "Zoro", "All Might", "Light Yagami", "Saitama", "Rimuru",
-            "Mario", "Sonic", "Kratos", "GLaDOS", "a Minecraft villager",
-            // Famous voices & styles
-            Royal.NAME, "Yoda", "Gollum", "Sherlock Holmes", "a pirate", "a cowboy",
-            "a news reporter", "a sports commentator", "a motivational coach", "a robot", "a villain monologue",
-            "a fairy tale narrator", "a Gen Z teenager", "a grumpy old man", "an overly polite butler",
-        )
+        val presets = Characters.presets
         val mine = Characters.custom(this).keys.sorted()
         val all = mine + presets
         val items = (listOf("Off", "➕ Make your own character…", "🔀 Mix two characters…") +

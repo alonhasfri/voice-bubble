@@ -480,6 +480,9 @@ class BubbleService : Service() {
                     else if (slid && !held && !pinched && !recorder.isRecording && !working &&
                         e.rawY - downY < -dpx(36) && abs(e.rawY - downY) > abs(e.rawX - downX)) {
                         showQuickPhrases()   // swiped up
+                    } else if (slid && !held && !pinched && !recorder.isRecording && !working &&
+                        e.rawY - downY > dpx(36) && abs(e.rawY - downY) > abs(e.rawX - downX)) {
+                        showCharacterPicker()   // swiped down
                     }
                 }
                 MotionEvent.ACTION_CANCEL -> {
@@ -1281,6 +1284,71 @@ class BubbleService : Service() {
                 result.onSuccess(done).onFailure { toast(it.message ?: "Something went wrong"); onFail?.invoke() }
             }
         }.start()
+    }
+
+    /**
+     * Swipe down on the bubble: pick who you talk like (or Normal), right there, no app and no voice command.
+     * Your recent ones and your own characters come first.
+     */
+    private fun showCharacterPicker() {
+        hideReplies()
+        buzz(20)
+        val cur = prefs.persona
+        val mine = Characters.custom(this).keys.sorted()
+        val recent = prefs.recentPersonas
+        val rest = (mine + Characters.presets).filter { it !in recent }
+        val dm = resources.displayMetrics
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun section(title: String) = list.addView(TextView(this).apply {
+            text = title; setTextColor(Color.rgb(169, 187, 255)); textSize = 12f; typeface = Typeface.DEFAULT_BOLD
+            setPadding(dpx(6), dpx(10), 0, dpx(2))
+        })
+        fun option(label: String, who: String?) = list.addView(TextView(this).apply {
+            val on = who == cur
+            text = if (on) "✓  $label" else label
+            setTextColor(Color.WHITE)
+            textSize = 15f
+            setPadding(dpx(14), dpx(10), dpx(14), dpx(10))
+            background = GradientDrawable().apply {
+                cornerRadius = dpx(14).toFloat()
+                setColor(if (on) Color.rgb(156, 92, 255) else Color.rgb(44, 52, 82))
+            }
+            setOnClickListener {
+                prefs.persona = who
+                hideReplies()
+                refreshLook()
+                buzz(15)
+                toast(if (who == null) "Normal voice" else "Talking like $who")
+            }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dpx(5) })
+        option("Normal (no character)", null)
+        if (recent.isNotEmpty()) { section("RECENT"); recent.forEach { option(it, it) } }
+        section("ALL"); rest.forEach { option(if (it in mine) "★ $it" else it, it) }
+
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpx(10), dpx(10), dpx(10), dpx(10))
+            background = GradientDrawable().apply { cornerRadius = dpx(20).toFloat(); setColor(Color.argb(245, 26, 31, 51)) }
+        }
+        val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        head.addView(TextView(this).apply {
+            text = "Talk like"; setTextColor(Color.WHITE); textSize = 15f; typeface = Typeface.DEFAULT_BOLD
+            setPadding(dpx(6), 0, 0, dpx(4))
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        head.addView(TextView(this).apply {
+            text = "✕"; setTextColor(Color.WHITE); textSize = 16f; setPadding(dpx(12), 0, dpx(6), dpx(4))
+            setOnClickListener { hideReplies() }
+        })
+        panel.addView(head)
+        panel.addView(android.widget.ScrollView(this).apply { addView(list) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (dm.heightPixels * 0.45).toInt()))
+        val p = overlayParams(dm.widthPixels - dpx(24), WindowManager.LayoutParams.WRAP_CONTENT).apply {
+            x = dpx(12)
+            val bottom = (keyboardTop ?: lastKbTop ?: (lp.y + screenOffset)) - dpx(12) - screenOffset
+            y = maxOf(dpx(40), bottom - (dm.heightPixels * 0.45).toInt() - dpx(60))
+        }
+        replyPanel = panel
+        runCatching { wm.addView(panel, p) }.onFailure { replyPanel = null }
     }
 
     /** Swipe up on the bubble: your quick phrases, one tap to type. */

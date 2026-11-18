@@ -102,6 +102,22 @@ Example: "Can you help me?" → "Hah. You dare ask the King of Curses for help, 
 """),
     )
 
+    /** The ready-made "talk like" list (in the app and in the bubble's character picker). */
+    val presets = listOf(
+        // Deltarune & Undertale
+        "Rouxls Kaard", "Spamton", "Jevil", "Sans", "Papyrus", "Undyne", "Alphys", "Mettaton", "Flowey",
+        "Toriel", "Asgore", "Temmie", "Susie", "Ralsei", "Lancer", "Berdly", "Noelle", "Tenna", "Queen",
+        // Jujutsu Kaisen
+        "Gojo", "Sukuna", "Yuji Itadori", "Megumi", "Nobara", "Nanami", "Todo", "Mahito", "Kenjaku", "Hakari",
+        // Other anime & games
+        "Goku", "Vegeta", "Naruto", "Luffy", "Zoro", "All Might", "Light Yagami", "Saitama", "Rimuru",
+        "Mario", "Sonic", "Kratos", "GLaDOS", "a Minecraft villager",
+        // Famous voices & styles
+        Royal.NAME, "Yoda", "Gollum", "Sherlock Holmes", "a pirate", "a cowboy",
+        "a news reporter", "a sports commentator", "a motivational coach", "a robot", "a villain monologue",
+        "a fairy tale narrator", "a Gen Z teenager", "a grumpy old man", "an overly polite butler",
+    )
+
     private fun norm(s: String) = s.lowercase().replace(Regex("[^a-z ]"), " ").replace(Regex("\\s+"), " ").trim()
 
     /** What the AI is told when you make a character: write a guide like the built-in ones. */
