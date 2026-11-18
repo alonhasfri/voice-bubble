@@ -298,3 +298,17 @@ class BatchThreeTest {
         assertEquals(8, AudioFile.resample(FloatArray(8), 16000, 16000).size)
     }
 }
+
+class CharacterPromptTest {
+    @Test fun noExampleSentToAi() {
+        val i = Characters.instruction("Spamton")
+        assertEquals(false, i.contains("Example"))
+        assertEquals(true, i.contains("[[Hyperlink Blocked]]"))
+        assertEquals(true, i.contains("Keep my words"))
+    }
+
+    @Test fun storyIsNotYourMessage() {
+        val said = "See you at the park"
+        assertEquals(false, Ai.keepsMeaning(said, "HEY EVERY BUDDY!! " + "NOW'S YOUR CHANCE TO BE A [[BIG SHOT]]!! ".repeat(6) + "park"))
+    }
+}

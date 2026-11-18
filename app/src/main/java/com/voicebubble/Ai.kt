@@ -21,7 +21,9 @@ import java.time.Duration
  * Only the text being rewritten/translated (or the visible chat, for replies) is sent.
  */
 object Ai {
-    class Failure(message: String) : Exception(message)
+    open class Failure(message: String) : Exception(message)
+    /** The AI said something else instead of your message (twice): your own words are used instead. */
+    class MeaningLost : Failure("The AI didn't keep what you said, so it wasn't used")
 
     fun key(c: Context) = c.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("aiKey", "")!!.trim()
     fun setKey(c: Context, k: String) = c.getSharedPreferences("voice", Context.MODE_PRIVATE).edit().putString("aiKey", k.trim()).apply()
@@ -102,12 +104,16 @@ object Ai {
         fun user(extra: String) = "The message to rewrite:\n<message>\n$text\n</message>" +
             (if (ownLength) "" else lengthNote(c, "rewrite")) + limitNote(cap) + chatNote(c) + extra +
             "\n\nNow write that same message, rewritten as instructed. Only the rewritten message."
-        var out = ask(c, system, user("")).let { clean(it) }
+        // Of the AIs that answer, the first that kept your message wins (not just the fastest).
+        val keeps = { o: String -> keepsMeaning(text, clean(o)) }
+        var out = clean(ask(c, system, user(""), accept = keeps, careful = true))
         // The AI said its own thing instead of your message: once more, firmly.
         if (!keepsMeaning(text, out)) {
-            val again = runCatching { clean(ask(c, system, user("\n\nImportant: keep every point of the message. Don't " +
-                "replace it with the character's usual lines; rewrite what it says."))) }.getOrNull()
-            if (again != null && keepsMeaning(text, again)) out = again
+            val again = runCatching { clean(ask(c, system, user("\n\nImportant: your last answer didn't say what the message " +
+                "says. Keep every point of the message, in the same order. Don't replace it with the character's usual " +
+                "lines or catchphrases; rewrite what it says."), accept = keeps, careful = true)) }.getOrNull()
+            // Still not your message: nothing random gets typed.
+            out = again?.takeIf { keepsMeaning(text, it) } ?: throw MeaningLost()
         }
         return if (cap != null && out.length > cap) Limit.fit(out, cap).first else out
     }
@@ -123,6 +129,8 @@ object Ai {
      * since characters bend words: "textedeth") are still in it.
      */
     fun keepsMeaning(original: String, rewrite: String): Boolean {
+        // Way longer than what you said: it added its own story.
+        if (rewrite.length > original.length * 4 + 80) return false
         val words = original.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 4 && it !in small }.distinct()
         if (words.size < 2) return true
         val out = rewrite.lowercase()
@@ -209,12 +217,17 @@ object Ai {
         (if (instruction.isNotBlank()) "My request: $instruction\n\n" else "") + "Screen:\n$chat" + lengthNote(c, "summary"))
 
     /** Blocking call: run it off the main thread. Throws [Failure] with a message you can show. */
-    private fun ask(c: Context, system: String, user: String, longAnswer: Boolean = false): String {
+    /**
+     * [accept]: when several free AIs answer, the first answer that passes this check is used (not just the
+     * fastest). [careful]: a lower "temperature", so it follows instructions instead of getting creative.
+     */
+    private fun ask(c: Context, system: String, user: String, longAnswer: Boolean = false,
+                    accept: ((String) -> Boolean)? = null, careful: Boolean = false): String {
         val k = key(c)
         if (k.isEmpty()) throw Failure("Add an AI key first (Settings → AI)")
         val text = when {
             k.startsWith("sk-ant") -> claude(k, system, user, Prefs(c).aiFast)
-            k.startsWith("sk-or-") -> openRouter(k, system, user, longAnswer)
+            k.startsWith("sk-or-") -> openRouter(k, system, user, longAnswer, accept, careful)
             else -> gemini(k, system, user)
         }
         return text.trim().ifEmpty { throw Failure("The AI sent back nothing. Try again") }
@@ -263,7 +276,8 @@ object Ai {
         "openrouter/free",                     // OpenRouter picks any free model
     )
 
-    private fun openRouter(key: String, system: String, user: String, longAnswer: Boolean = false): String {
+    private fun openRouter(key: String, system: String, user: String, longAnswer: Boolean = false,
+                           accept: ((String) -> Boolean)? = null, careful: Boolean = false): String {
         val maxTokens = if (longAnswer) 3000 else (user.length * 2 + 300).coerceAtMost(1500)
         // Free models are often slow only because they're busy: ask two at once and take the first answer.
         val racers = openRouterModels.take(2)
@@ -272,30 +286,38 @@ object Ai {
         val authError = java.util.concurrent.atomic.AtomicReference<Failure?>(null)
         racers.forEach { m ->
             done.submit(java.util.concurrent.Callable<String?> {
-                try { openRouterOnce(key, m, system, user, maxTokens) } catch (e: Failure) { authError.set(e); null }
+                try { openRouterOnce(key, m, system, user, maxTokens, careful) } catch (e: Failure) { authError.set(e); null }
             })
         }
+        var fallback: String? = null
         try {
             repeat(racers.size) {
                 val r = done.take().get()
-                if (!r.isNullOrBlank()) return r
+                if (!r.isNullOrBlank()) {
+                    // A good answer wins; one that fails the check waits for the other AI's answer.
+                    if (accept == null || accept(r)) return r
+                    if (fallback == null) fallback = r
+                }
                 authError.get()?.let { throw it }
             }
         } finally {
             pool.shutdownNow()
         }
+        fallback?.let { return it }
         // Both busy or gone: let OpenRouter pick any free model.
-        return openRouterOnce(key, openRouterModels.last(), system, user, maxTokens)
+        return openRouterOnce(key, openRouterModels.last(), system, user, maxTokens, careful)
             ?: throw Failure("OpenRouter's free models are busy. Try again in a moment")
     }
 
     /** One request to one model. Null when that model is busy or unavailable; throws for a bad key. */
-    private fun openRouterOnce(key: String, model: String, system: String, user: String, maxTokens: Int): String? {
+    private fun openRouterOnce(key: String, model: String, system: String, user: String, maxTokens: Int,
+                               careful: Boolean = false): String? {
         for (noThinking in listOf(true, false)) {
             try {
                 val body = JSONObject()
                     .put("model", model)
                     .put("max_tokens", maxTokens)
+                    .apply { if (careful) put("temperature", 0.4) }
                     .put("messages", JSONArray()
                         .put(JSONObject().put("role", "system").put("content", system))
                         .put(JSONObject().put("role", "user").put("content", user)))

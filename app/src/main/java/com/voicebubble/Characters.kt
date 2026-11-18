@@ -144,18 +144,24 @@ Example: "Can you help me?" → "Hah. You dare ask the King of Curses for help, 
     fun parts(who: String): List<String> = who.split(mixRe).map { it.trim() }.filter { it.isNotEmpty() }.take(3)
     fun isMix(who: String) = parts(who).size >= 2
 
+    /**
+     * The guide without its example line: free AIs tend to copy the example ("I'll be home at 6") instead of
+     * rewriting your message, so they only get the description of the voice.
+     */
+    private fun voiceOnly(g: String) = g.lines().filterNot { it.trim().startsWith("Example", ignoreCase = true) }.joinToString("\n").trim()
+
     /** What the AI is told for "make me sound like …": the character's guide when there is one. */
     fun instruction(who: String, c: android.content.Context? = null): String {
         if (isMix(who)) {
             val ps = parts(who)
-            val guides = ps.joinToString("\n\n") { p -> guideFor(p, c) ?: if (Royal.wanted(p)) Royal.AI else "$p: their usual way of talking." }
+            val guides = ps.joinToString("\n\n") { p -> guideFor(p, c)?.let { voiceOnly(it) } ?: if (Royal.wanted(p)) Royal.AI else "$p: their usual way of talking." }
             return "Make me sound like a mix of ${ps.joinToString(" and ")}: blend their voices into one, using a few " +
                 "touches from each (their words, habits and catchphrases) in the same message. Still say just what I " +
                 "meant, as a message I'm sending: no extra sentences or story.\n\n$guides"
         }
         val g = guideFor(who, c) ?: return "Make me sound like $who"
-        return "Make me sound like this character, using the guide for their voice, habits and words. Use a few of " +
-            "these touches so it's clearly them, not all of them at once. Still say just what I meant, as a message " +
-            "I'm sending: no extra sentences or story. The examples show the voice, not how much to write.\n\n$g"
+        return "Make me sound like ${who.trim()}, using this guide to their voice. Keep my words and my meaning, in " +
+            "my order; change HOW it's said (their grammar, spelling habits, capitals, what they call people), and add " +
+            "at most one or two of their catchphrases. Don't add anything I didn't say.\n\n${voiceOnly(g)}"
     }
 }

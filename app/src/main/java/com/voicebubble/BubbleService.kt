@@ -816,7 +816,12 @@ class BubbleService : Service() {
             } else if (text != null && Instant.has(persona) && !Characters.isMix(persona!!) && (prefs.instantChars || !Ai.hasKey(this))) {
                 text = Instant.apply(persona!!, text) ?: text   // instant character, no AI
             } else if (text != null && persona != null && Ai.hasKey(this)) {
-                text = try { Ai.rewrite(this, text, Royal.instruction(persona, this), s.limit) } catch (e: Ai.Failure) { problem = e.message; text }
+                text = try { Ai.rewrite(this, text, Royal.instruction(persona, this), s.limit) } catch (e: Ai.Failure) {
+                    // The AI went wrong: the instant version of the character if there is one, else your own words.
+                    val instant = if (!Characters.isMix(persona)) Instant.apply(persona, text!!) else null
+                    problem = if (instant != null) "AI character didn't work this time, used the instant one" else e.message
+                    instant ?: text
+                }
             }
             if (text != null && s.aiTarget != null && !s.plainOnly) {
                 text = try { finishTranslation(s, text, usePre = persona == null) } catch (e: Ai.Failure) { problem = e.message; text }
