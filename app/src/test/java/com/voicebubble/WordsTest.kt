@@ -105,3 +105,17 @@ class PackFixesTest {
         assertEquals("I have a lot to do.", d("I have a lot to do."))
     }
 }
+
+class DictionaryReachTest {
+    private fun d(s: String, vararg words: String) = Words.applyDictionary(s, words.toList())
+
+    @Test fun shortNamesAndVowels() {
+        assertEquals("Hi Elad, how are you?", d("Hi Ilad, how are you?", "Elad"))
+        assertEquals("Ask Noam", d("Ask Noem", "Noam"))
+    }
+
+    @Test fun everydayWordsStay() {
+        assertEquals("It's the same game", d("It's the same game", "Sami"))
+        assertEquals("Grab the mike", d("Grab the mike", "Mika"))
+    }
+}

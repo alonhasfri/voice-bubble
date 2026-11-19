@@ -80,6 +80,12 @@ object Ai {
         else -> maxOf(90, (textLen * 1.8).toInt())   // "as I said it": about as long as what you said
     }
 
+    /** Your dictionary words, so the AI spells them your way. */
+    private fun namesNote(c: Context): String {
+        val words = Words.dictionary(c).take(40)
+        return if (words.isEmpty()) "" else "\n\nSpell these names and words exactly like this: ${words.joinToString(", ")}."
+    }
+
     /** Roblox hides (####) anything its chat filter doesn't like: the AI writes so it gets through. */
     private fun chatNote(c: Context): String =
         if (runCatching { AppDetector.current(c) == Limit.ROBLOX }.getOrDefault(false))
@@ -102,7 +108,7 @@ object Ai {
             "said; a few touches, natural and easy to read, not a quirk on every word, not just catchphrases on their own. " +
             "Reply with only the rewritten message: no quotes, no explanation.\n\nInstruction: $instruction"
         fun user(extra: String) = "The message to rewrite:\n<message>\n$text\n</message>" +
-            (if (ownLength) "" else lengthNote(c, "rewrite")) + limitNote(cap) + chatNote(c) + extra +
+            (if (ownLength) "" else lengthNote(c, "rewrite")) + limitNote(cap) + chatNote(c) + namesNote(c) + extra +
             "\n\nNow write that same message, rewritten as instructed. Only the rewritten message."
         // Of the AIs that answer, the first that kept your message wins (not just the fastest).
         val keeps = { o: String -> keepsMeaning(text, clean(o)) }
@@ -142,7 +148,7 @@ object Ai {
         "You translate text someone dictated by voice; it gets sent as a chat message. Keep the tone, names and emoji. " +
             "Reply with only the translated message itself: no label or heading (never \"Message in $language:\" or " +
             "\"Translation:\"), no quotes, no explanation.",
-        "Translate the text between the tags into $language.\n<text>\n$text\n</text>" + limitNote(maxChars) + chatNote(c)), language)
+        "Translate the text between the tags into $language.\n<text>\n$text\n</text>" + limitNote(maxChars) + chatNote(c) + namesNote(c)), language)
 
     /** Removes labels some AIs add anyway ("Message in Hebrew:", "Translation:", "**Hebrew:**", <text> tags). */
     fun cleanTranslation(out: String, language: String): String {

@@ -84,6 +84,39 @@ object Words {
         "did", "has", "had", "her", "him", "his", "its", "our", "she", "they", "them", "this", "that", "what", "with",
         "your", "a", "i", "if", "us", "am", "oh", "ok", "hi", "yes", "way", "day", "man", "ten", "time")
 
+    /**
+     * Everyday words: a 4-letter one is only changed into one of your words when it sounds exactly the same,
+     * so "same" never becomes "Sam" and "mike" stays a mic unless you say it like your word.
+     */
+    private val everyday = common + setOf("also", "back", "been", "best", "call", "came", "come", "cool", "could",
+        "dead", "does", "done", "down", "each", "else", "even", "ever", "fast", "feel", "fine", "five", "food", "four",
+        "free", "from", "full", "game", "gave", "girl", "give", "glad", "goes", "gone", "good", "guys", "half", "hand",
+        "hard", "have", "head", "hear", "help", "here", "hold", "home", "hope", "hour", "idea", "into", "just", "keep",
+        "kind", "knew", "know", "last", "late", "left", "less", "life", "like", "line", "list", "live", "long", "look",
+        "lose", "lost", "love", "made", "make", "many", "mean", "meet", "mind", "mine", "miss", "mode", "more", "most",
+        "move", "much", "must", "name", "near", "need", "next", "nice", "nine", "none", "only", "open", "over", "page",
+        "part", "past", "play", "plan", "real", "rest", "ride", "road", "room", "said", "same", "save", "seen", "send",
+        "show", "side", "sign", "some", "song", "soon", "sure", "take", "talk", "team", "tell", "text", "than", "then",
+        "they", "thing", "this", "told", "took", "town", "tree", "true", "turn", "type", "very", "wait", "walk", "want",
+        "week", "well", "went", "were", "what", "when", "will", "wish", "word", "work", "year", "yeah", "zone", "able",
+        "ally", "anna", "area", "away", "baby", "ball", "bank", "base", "bear", "beat", "bike", "bill", "bird", "blue",
+        "boat", "body", "book", "born", "both", "busy", "cake", "card", "care", "case", "cash", "chat", "city", "club",
+        "coat", "code", "cold", "copy", "core", "cost", "crew", "cute", "dark", "data", "date", "deal", "dear", "deep",
+        "door", "draw", "drop", "easy", "edge", "exit", "face", "fact", "fair", "fall", "fear", "file", "fill", "film",
+        "find", "fire", "fish", "flag", "fold", "fork", "form", "fund", "gift", "goal", "gold", "grow", "hair", "hall",
+        "hate", "heat", "hero", "high", "hill", "huge", "hurt", "item", "join", "joke", "jump", "kick", "kill", "king",
+        "lady", "lake", "land", "lead", "lift", "link", "loud", "luck", "mail", "main", "mark", "mate", "meal", "mike",
+        "milk", "moon", "near", "neck", "news", "note", "pack", "pain", "pair", "park", "pass", "path", "pick", "pink",
+        "plus", "poll", "pool", "poor", "post", "pull", "push", "race", "rain", "rank", "rate", "read", "rich", "ring",
+        "rise", "risk", "rock", "role", "roll", "rule", "rush", "safe", "sale", "salt", "sand", "seat", "sell", "ship",
+        "shop", "shot", "sick", "size", "skin", "slow", "snow", "sort", "spot", "star", "stay", "step", "stop", "suit",
+        "swim", "tale", "tall", "task", "tear", "test", "tiny", "tool", "tour", "trip", "unit", "upon", "user", "view",
+        "vote", "wake", "wall", "warm", "wash", "wave", "wear", "wide", "wife", "wild", "wind", "wine", "wing", "wise",
+        "wood", "yard", "kate", "jack", "john", "mary", "paul", "luke", "adam", "ryan", "matt", "nick")
+
+    /** Names that start with a vowel are often heard with a different one ("Ilad" for "Elad"). */
+    private fun sameStart(a: Char, b: Char) = a == b || (a in "aeiouy" && b in "aeiouy")
+
     fun sound(s: String): String {
         var t = norm(s).replace("ph", "f").replace("ck", "k").replace("kh", "h")
             .replace(chrRe, "k")                     // "Chris" sounds like "Kris"
@@ -177,9 +210,13 @@ object Words {
                     val cand = windowSound(i, k, poss)
                     val len = maxOf(cand.length, key.length)
                     // A pack name split into pieces may be a letter off too ("go Joe" → "Gojo").
-                    val a = if (isStrict) maxOf(strictAllowed(len), if (split && len >= 4) 1 else 0) else allowed(len)
+                    // Your own words: a 4-letter one may be a letter off too, unless what was heard is an everyday word.
+                    val heardEveryday = k == 1 && window[0].n in everyday
+                    val a = if (isStrict) maxOf(strictAllowed(len), if (split && len >= 4) 1 else 0)
+                        else if (heardEveryday) 0 else if (len == 4) 1 else allowed(len)
+                    val startOk = if (isStrict) cand[0] == key[0] else sameStart(cand[0], key[0])
                     val ok = cand.length >= 3 && abs(cand.length - key.length) <= a &&
-                        (cand == key || (cand[0] == key[0] && lev(cand, key) <= a))
+                        (cand == key || (startOk && lev(cand, key) <= a))
                     if (ok) {
                         val s = window.first().start
                         val e = window.last().end - poss.length

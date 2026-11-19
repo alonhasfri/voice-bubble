@@ -1195,7 +1195,8 @@ class BubbleService : Service() {
      * otherwise by dropping filler words and cutting at the end of a sentence or word).
      */
     private fun finishForApp(app: String?, text: String, limit: Int?): String {
-        var t = text
+        // Your dictionary once more, at the very end: the AI steps (characters, fixes, translation) can respell names.
+        var t = runCatching { Words.applyDictionary(text, Words.dictionary(this), Words.shortcuts(this)) }.getOrDefault(text)
         if (app == Limit.ROBLOX && prefs.robloxSafe) {
             val r = RobloxSafe.clean(t)
             if (r.changed > 0) main.post { toast("Made it Roblox-safe: ${r.changed} word${if (r.changed == 1) "" else "s"} changed") }
