@@ -212,6 +212,7 @@ class QuickMenu(
         feature(Feature.SOUNDS)
         feature(Feature.VIBRATION)
         toggle("Live text next to the bubble", prefs.liveText) { prefs.liveText = it }
+        toggle("Detailed skins (off = simple)", prefs.skinDetail) { prefs.skinDetail = it }
         toggle("Animated skins", prefs.animSkins) { prefs.animSkins = it }
         feature(Feature.ONLY_TYPING, "Only while typing")
         toggle("Sit right above the keyboard", prefs.dockAboveKeyboard) { prefs.dockAboveKeyboard = it; prefs.dockLift = 0 }

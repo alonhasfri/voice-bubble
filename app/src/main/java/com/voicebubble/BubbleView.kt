@@ -65,24 +65,28 @@ object Skins {
 
     private val pictures = HashMap<String, android.graphics.Bitmap?>()
 
-    /** The built-in skins plus the ones you made. */
-    fun all(c: android.content.Context): List<Skin> = all + SkinArt.list(c).mapNotNull { cs ->
+    /** A skin from a drawing (the AI's, a shared one, or the drawn ones that come with the app). */
+    fun fromSpec(id: String, title: String, spec: org.json.JSONObject, custom: Boolean): Skin {
+        val bg = spec.optJSONArray("background")
+        val c1 = SkinArt.color(bg?.opt(0) ?: spec.opt("background"), Color.rgb(58, 91, 217))
+        val c2 = bg?.opt(1)?.let { SkinArt.color(it, c1) }
+        val mic = spec.opt("mic")
+        return Skin(id, title, c1, idle2 = c2, icon = SkinArt.color(mic, Color.WHITE),
+            glow = spec.opt("glow")?.let { if (it is String) SkinArt.color(it, Color.WHITE) else null },
+            pattern = "art", art = spec, showMic = mic is String, custom = custom)
+    }
+
+    /** The built-in skins, the drawn ones that come with the app, and the ones you made. */
+    fun all(c: android.content.Context): List<Skin> = all + SkinArt.builtin(c).map { fromSpec(it.id, it.title, it.spec!!, false) } +
+        SkinArt.list(c).mapNotNull { cs ->
         when (cs.kind) {
             "image" -> {
                 val bmp = pictures.getOrPut(cs.id) { android.graphics.BitmapFactory.decodeFile(SkinArt.imageFile(c, cs.id).path) }
                     ?: return@mapNotNull null
-                Skin(cs.id, cs.title, Color.BLACK, pattern = "image", image = bmp, showMic = false, custom = true)
+                // Your picture with the microphone on top (over a soft dark circle, so it shows on any picture).
+                Skin(cs.id, cs.title, Color.BLACK, pattern = "image", image = bmp, showMic = true, custom = true)
             }
-            "ai" -> {
-                val spec = cs.spec ?: return@mapNotNull null
-                val bg = spec.optJSONArray("background")
-                val c1 = SkinArt.color(bg?.opt(0) ?: spec.opt("background"), Color.rgb(58, 91, 217))
-                val c2 = bg?.opt(1)?.let { SkinArt.color(it, c1) }
-                val mic = spec.opt("mic")
-                Skin(cs.id, cs.title, c1, idle2 = c2, icon = SkinArt.color(mic, Color.WHITE),
-                    glow = spec.opt("glow")?.let { if (it is String) SkinArt.color(it, Color.WHITE) else null },
-                    pattern = "art", art = spec, showMic = mic is String, custom = true)
-            }
+            "ai" -> cs.spec?.let { fromSpec(cs.id, cs.title, it, true) }
             else -> null
         }
     }
@@ -109,6 +113,9 @@ class BubbleView(context: Context) : View(context) {
     var moving = false
         set(v) { field = v; invalidate() }
     var seconds = 0
+    /** Detailed skins (shading, shine, texture, every small part) or Simple ones (flat, big shapes only). */
+    var detailed: Boolean = runCatching { Prefs(context).skinDetail }.getOrDefault(true)
+        set(v) { field = v; invalidate() }
     /** Animated skins move while idle (off = still pictures, a little less battery). */
     var animated = true
         set(v) { field = v; invalidate() }
@@ -214,11 +221,14 @@ class BubbleView(context: Context) : View(context) {
             "image" -> skin.image?.let { bmp ->
                 c.save(); c.clipPath(shapePath(cx, cy, r))
                 c.drawBitmap(bmp, null, RectF(cx - r, cy - r, cx + r, cy + r), Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+                // A soft dark circle in the middle so the microphone shows on any picture.
+                pat.color = Color.argb(110, 30, 30, 30)
+                c.drawCircle(cx, cy, r * 0.62f, pat)
                 c.restore()
             }
             "art" -> skin.art?.let { spec ->
                 c.save(); c.clipPath(shapePath(cx, cy, r))
-                SkinArt.drawShapes(c, spec, cx, cy, r)
+                SkinArt.drawShapes(c, if (detailed) spec else SkinArt.simple(spec), cx, cy, r)
                 c.restore()
             }
             "hollowpurple" -> {
@@ -334,6 +344,81 @@ class BubbleView(context: Context) : View(context) {
         pat.shader = null; pat.maskFilter = null
     }
 
+    private val detailPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    /**
+     * The "Detailed" look on top of a skin: shading towards the edge, a soft shine, a fine rim, and for the plain
+     * colour skins a texture of their own (sparkles, waves, code, bubbles…).
+     */
+    private fun drawDetail(c: Canvas, cx: Float, cy: Float, r: Float) {
+        val shape = shapePath(cx, cy, r)
+        c.save(); c.clipPath(shape)
+        // Texture for the plain colour skins.
+        detailPaint.shader = null; detailPaint.style = Paint.Style.FILL; detailPaint.maskFilter = null
+        when (skin.id) {
+            "gold", "diamond", "star", "classic" -> {
+                for ((fx, fy, fs) in listOf(Triple(-0.45f, -0.4f, 0.16f), Triple(0.5f, 0.35f, 0.12f), Triple(0.3f, -0.55f, 0.09f)))
+                    drawSparkle(c, cx + fx * r, cy + fy * r, r * fs, Color.argb(220, 255, 255, 255))
+            }
+            "midnight", "sixeyes", "void" -> {
+                detailPaint.color = Color.argb(200, 255, 255, 255)
+                for (i in 0 until 12) {
+                    val a = i * 2.4; val rr = r * (0.3f + (i % 4) * 0.17f)
+                    c.drawCircle(cx + (rr * cos(a)).toFloat(), cy + (rr * sin(a)).toFloat(), d * (0.5f + (i % 3) * 0.3f), detailPaint)
+                }
+            }
+            "matrix" -> {
+                detailPaint.color = Color.argb(150, 60, 255, 120)
+                for (col in -3..3) for (row in -4..4) if ((col * 7 + row * 3 + 20) % 3 != 0)
+                    c.drawRect(cx + col * r * 0.26f - d, cy + row * r * 0.22f - d * 1.6f, cx + col * r * 0.26f + d, cy + row * r * 0.22f + d * 1.6f, detailPaint)
+            }
+            "lava" -> {
+                detailPaint.color = Color.argb(120, 120, 0, 0)
+                for ((fx, fy, fs) in listOf(Triple(-0.4f, 0.3f, 0.3f), Triple(0.35f, -0.35f, 0.22f), Triple(0.45f, 0.45f, 0.18f), Triple(-0.3f, -0.5f, 0.14f)))
+                    c.drawCircle(cx + fx * r, cy + fy * r, r * fs, detailPaint)
+            }
+            "ocean", "mint" -> {
+                detailPaint.style = Paint.Style.STROKE; detailPaint.strokeWidth = 1.6f * d; detailPaint.color = Color.argb(110, 255, 255, 255)
+                for (k in -1..1) {
+                    val y = cy + k * r * 0.45f
+                    patPath.reset(); patPath.moveTo(cx - r, y)
+                    var x = cx - r
+                    while (x < cx + r) { patPath.quadTo(x + r * 0.12f, y - r * 0.1f, x + r * 0.24f, y); patPath.quadTo(x + r * 0.36f, y + r * 0.1f, x + r * 0.48f, y); x += r * 0.48f }
+                    c.drawPath(patPath, detailPaint)
+                }
+            }
+            "bubblegum", "sunset" -> {
+                detailPaint.style = Paint.Style.STROKE; detailPaint.strokeWidth = 1.2f * d; detailPaint.color = Color.argb(140, 255, 255, 255)
+                for ((fx, fy, fs) in listOf(Triple(-0.45f, 0.35f, 0.16f), Triple(0.4f, -0.4f, 0.12f), Triple(0.5f, 0.3f, 0.08f), Triple(-0.2f, -0.55f, 0.07f)))
+                    c.drawCircle(cx + fx * r, cy + fy * r, r * fs, detailPaint)
+            }
+            "honey" -> {
+                detailPaint.style = Paint.Style.STROKE; detailPaint.strokeWidth = 1.2f * d; detailPaint.color = Color.argb(90, 120, 60, 0)
+                c.drawPath(shapePath(cx, cy, r * 0.7f), detailPaint); c.drawPath(shapePath(cx, cy, r * 0.42f), detailPaint)
+                shapePath(cx, cy, r)   // put the outline back for the clip-free parts below
+            }
+            "cursed", "ghost" -> {
+                detailPaint.style = Paint.Style.STROKE; detailPaint.strokeWidth = 1.4f * d
+                detailPaint.color = if (skin.id == "ghost") Color.argb(60, 60, 60, 90) else Color.argb(120, 255, 60, 80)
+                for (k in 0 until 3) c.drawArc(RectF(cx - r * (0.5f + k * 0.15f), cy - r * (0.5f + k * 0.15f), cx + r * (0.5f + k * 0.15f), cy + r * (0.5f + k * 0.15f)), 200f + k * 40f, 70f, false, detailPaint)
+            }
+        }
+        // Shading towards the edge, and a soft shine at the top left.
+        detailPaint.style = Paint.Style.FILL
+        detailPaint.shader = RadialGradient(cx - r * 0.2f, cy - r * 0.25f, r * 1.25f,
+            intArrayOf(Color.argb(0, 0, 0, 0), Color.argb(0, 0, 0, 0), Color.argb(90, 0, 0, 0)), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+        c.drawRect(cx - r * 1.2f, cy - r * 1.2f, cx + r * 1.2f, cy + r * 1.2f, detailPaint)
+        detailPaint.shader = RadialGradient(cx - r * 0.38f, cy - r * 0.48f, r * 0.55f,
+            intArrayOf(Color.argb(110, 255, 255, 255), Color.argb(0, 255, 255, 255)), null, Shader.TileMode.CLAMP)
+        c.drawOval(RectF(cx - r * 0.85f, cy - r * 0.95f, cx + r * 0.1f, cy - r * 0.05f), detailPaint)
+        detailPaint.shader = null
+        c.restore()
+        // A fine light rim.
+        detailPaint.style = Paint.Style.STROKE; detailPaint.strokeWidth = 1.2f * d; detailPaint.color = Color.argb(80, 255, 255, 255)
+        c.drawPath(shapePath(cx, cy, r - 0.6f * d), detailPaint)
+        detailPaint.style = Paint.Style.FILL
+    }
+
     private val eyePath = Path()
     private val eyePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val lash = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
@@ -438,6 +523,7 @@ class BubbleView(context: Context) : View(context) {
             }
         }
         if (state == State.IDLE) drawPattern(c, cx, cy, r)
+        if (state == State.IDLE && detailed && skin.pattern != "image") drawDetail(c, cx, cy, r)
         if (moving) {
             ring.color = Color.WHITE
             ring.strokeWidth = 2.5f * d

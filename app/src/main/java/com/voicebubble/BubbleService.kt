@@ -171,6 +171,7 @@ class BubbleService : Service() {
     private fun refreshLook() {
         view?.skin = skinFor(skinApp)
         view?.animated = prefs.animSkins
+        view?.detailed = prefs.skinDetail
         view?.caps = prefs.capsLock
         view?.persona = prefs.persona != null
         styleCapsChip()

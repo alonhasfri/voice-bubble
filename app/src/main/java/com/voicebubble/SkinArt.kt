@@ -20,9 +20,14 @@ import java.io.File
 object SkinArt {
     /** What the AI is told: draw on a 100×100 circle with a few simple shapes. */
     const val AI_FORMAT = """You design the look of a small round floating button (a "bubble", about 1.5 cm on a phone screen).
-Draw it with simple vector shapes on a 100×100 canvas; the bubble is the circle centred at (50,50) with radius 50, and
-anything outside it is cut off. Make it bold, recognisable and colourful at that small size: big simple shapes,
-strong outlines, few details. Draw it as your own original take on the idea.
+Draw it with vector shapes on a 100×100 canvas; the bubble is the circle centred at (50,50) with radius 50, and
+anything outside it is cut off. Fill the circle with the subject, centred and big (it should reach about 8 to 12 units
+from the edge). Make it detailed but clear at that small size: 15 to 45 shapes, built in layers from back to front:
+big base shapes first, then a darker shade on one side, then lighter highlights (a soft white shine, e.g. "#60FFFFFF"),
+then small details (eyes, seeds, sparkles, texture dots). Use a background colour that contrasts with the subject.
+Draw it as your own original take on the idea. Check every coordinate is between 0 and 100.
+Example (a cute frog), for the format and the level of detail:
+{"name":"Frog","background":["#E8F5E9"],"glow":null,"mic":null,"shapes":[{"type":"circle","x":30,"y":30,"r":14,"color":"#66BB6A"},{"type":"circle","x":70,"y":30,"r":14,"color":"#66BB6A"},{"type":"ellipse","x":50,"y":58,"rx":40,"ry":30,"color":"#66BB6A"},{"type":"circle","x":30,"y":30,"r":10,"color":"#FFFFFF"},{"type":"circle","x":70,"y":30,"r":10,"color":"#FFFFFF"},{"type":"circle","x":31,"y":31,"r":6,"color":"#1A1A1A"},{"type":"circle","x":71,"y":31,"r":6,"color":"#1A1A1A"},{"type":"circle","x":33,"y":29,"r":2,"color":"#FFFFFF"},{"type":"circle","x":73,"y":29,"r":2,"color":"#FFFFFF"},{"type":"path","d":"M 26 62 Q 50 80 74 62","color":"#2E7D32","stroke":3},{"type":"circle","x":26,"y":56,"r":4,"color":"#A0F48FB1"},{"type":"circle","x":74,"y":56,"r":4,"color":"#A0F48FB1"}]}
 Reply with ONLY a JSON object, no other text:
 {
   "name": "short name, 1-3 words",
@@ -84,8 +89,8 @@ Shapes (colours are "#RRGGBB" or "#AARRGGBB"; add "stroke": width to draw only t
         return id
     }
 
-    /** Reads the AI's answer; null when it isn't a usable drawing. */
-    fun parseSpec(answer: String): JSONObject? {
+    /** Reads the AI's answer; null when it isn't a usable drawing (or too bare to look like anything). */
+    fun parseSpec(answer: String, minShapes: Int = 0): JSONObject? {
         val start = answer.indexOf('{')
         val end = answer.lastIndexOf('}')
         if (start < 0 || end <= start) return null
@@ -94,8 +99,10 @@ Shapes (colours are "#RRGGBB" or "#AARRGGBB"; add "stroke": width to draw only t
             val i = line.indexOf("//")
             if (i >= 0 && line.substring(0, i).count { it == '"' } % 2 == 0) line.substring(0, i) else line
         }
+            // AIs often leave a comma before } or ]: allowed here.
+            .replace(Regex(",\\s*([}\\]])"), "$1")
         return try {
-            JSONObject(json).takeIf { it.has("background") || it.has("shapes") }
+            JSONObject(json).takeIf { (it.has("background") || it.has("shapes")) && (it.optJSONArray("shapes")?.length() ?: 0) >= minShapes }
         } catch (e: Exception) { null }
     }
 
@@ -104,6 +111,53 @@ Shapes (colours are "#RRGGBB" or "#AARRGGBB"; add "stroke": width to draw only t
         val name = spec.optString("name").trim().take(24).ifEmpty { "AI skin" }
         save(c, list(c) + Custom(id, name, "ai", spec))
         return id
+    }
+
+    // ---------------- the ready-made drawn skins ----------------
+
+    private var builtinCache: List<Custom>? = null
+
+    /** The drawn skins that come with the app (assets/skins_art.json; made with tools/skins/gen.py). */
+    fun builtin(c: Context): List<Custom> = builtinCache ?: runCatching {
+        val arr = JSONArray(c.assets.open("skins_art.json").bufferedReader().use { it.readText() })
+        (0 until arr.length()).map { i -> arr.getJSONObject(i).let { Custom(it.getString("id"), it.getString("name"), "ai", it.getJSONObject("spec")) } }
+    }.getOrDefault(emptyList()).also { builtinCache = it }
+
+    private val simpleCache = java.util.WeakHashMap<JSONObject, JSONObject>()
+
+    /**
+     * The simple version of a drawing: only its bigger shapes (small dots, thin lines, tiny text and fine texture
+     * left out), for the "Simple" skin style.
+     */
+    fun simple(spec: JSONObject): JSONObject = simpleCache.getOrPut(spec) {
+        val src = spec.optJSONArray("shapes") ?: JSONArray()
+        val out = JSONArray()
+        for (i in 0 until src.length()) {
+            val s = src.optJSONObject(i) ?: continue
+            val stroke = s.optDouble("stroke", 0.0)
+            val keep = when (s.optString("type")) {
+                "circle" -> s.optDouble("r") >= 4.5 && (stroke == 0.0 || stroke >= 2.5)
+                "ellipse" -> s.optDouble("rx") * s.optDouble("ry") >= 30 && (stroke == 0.0 || stroke >= 2.5)
+                "rect" -> s.optDouble("w") * s.optDouble("h") >= 60
+                "line" -> s.optDouble("width", 2.0) >= 2.5 && Math.hypot(s.optDouble("x2") - s.optDouble("x1"), s.optDouble("y2") - s.optDouble("y1")) >= 14
+                "polygon" -> s.optJSONArray("points")?.let { area(it) >= 50 } ?: false
+                "path" -> stroke == 0.0 || stroke >= 3
+                "text" -> s.optDouble("size") >= 12
+                else -> false
+            }
+            if (keep) out.put(s)
+        }
+        JSONObject(spec.toString()).put("shapes", out)
+    }
+
+    private fun area(pts: JSONArray): Double {
+        var a = 0.0
+        for (i in 0 until pts.length()) {
+            val p = pts.optJSONArray(i) ?: return 0.0
+            val q = pts.optJSONArray((i + 1) % pts.length()) ?: return 0.0
+            a += p.optDouble(0) * q.optDouble(1) - q.optDouble(0) * p.optDouble(1)
+        }
+        return Math.abs(a) / 2
     }
 
     // ---------------- sharing ----------------

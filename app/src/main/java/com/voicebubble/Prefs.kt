@@ -168,6 +168,10 @@ class Prefs(private val ctx: Context) {
     var quickPhrases: List<String>
         get() = p.getString("quickPhrases", "gg\nbrb\none sec\ntrade?\nlol\nty!\nomw\ngg ez")!!.lines().map { it.trim() }.filter { it.isNotEmpty() }
         set(v) = p.edit().putString("quickPhrases", v.joinToString("\n")).apply()
+    /** Skins in their detailed look (true) or the simple, flat one (false). */
+    var skinDetail: Boolean
+        get() = p.getBoolean("skinDetail", true)
+        set(v) = p.edit().putBoolean("skinDetail", v).apply()
     /** Themed skins move (rings spin, stars twinkle, the soul beats). */
     var animSkins: Boolean
         get() = p.getBoolean("animSkins", true)

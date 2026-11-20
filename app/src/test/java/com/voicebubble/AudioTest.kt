@@ -347,3 +347,19 @@ class IntensityTest {
         for (lv in 0..3) for (who in Instant.supported) assertEquals("$who $lv", true, Ai.keepsMeaning(said, Instant.apply(who, said, lv)!!))
     }
 }
+
+class SkinDetailTest {
+    @Test fun simpleKeepsBigShapes() {
+        val spec = SkinArt.parseSpec("""{"name":"T","background":["#FFFFFF"],"shapes":[
+            {"type":"circle","x":50,"y":50,"r":30,"color":"#FF0000"},
+            {"type":"circle","x":40,"y":40,"r":1,"color":"#000000"},
+            {"type":"line","x1":10,"y1":10,"x2":12,"y2":12,"width":1,"color":"#000000"},
+            {"type":"text","x":50,"y":50,"size":5,"text":"hi","color":"#000000"},]}""")!!
+        assertEquals(4, spec.getJSONArray("shapes").length())
+        assertEquals(1, SkinArt.simple(spec).getJSONArray("shapes").length())
+    }
+
+    @Test fun bareDrawingsAreRejected() {
+        assertNull(SkinArt.parseSpec("""{"background":["#000000"],"shapes":[{"type":"circle","x":50,"y":50,"r":10,"color":"#FFFFFF"}]}""", minShapes = 6))
+    }
+}

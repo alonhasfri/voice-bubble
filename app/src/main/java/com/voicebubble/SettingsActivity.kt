@@ -16,6 +16,8 @@ class SettingsActivity : Screen() {
         page.addView(Ui.sectionTitle(this, "Floating microphone"))
         page.addView(Ui.group(this, listOf(
             Ui.row(this, R.drawable.ui_star, "gold", "Bubble skin", value = Skins.byId(this, prefs.skin).title) { pickSkin() },
+            Ui.switchRow(this, R.drawable.ui_star, "gold", "Detailed skins",
+                "Shading, shine and every small part. Off: the simple, flat version of each skin", prefs.skinDetail) { on -> prefs.skinDetail = on; refreshBubble(); render() },
             Ui.switchRow(this, R.drawable.ui_spark, "purple", "Animated skins",
                 "Themed skins move: rings spin, stars twinkle, the soul beats", prefs.animSkins) { on -> prefs.animSkins = on; refreshBubble() },
             Ui.row(this, R.drawable.ui_zap, "orange", "Quick phrases", value = "${prefs.quickPhrases.size}",
@@ -289,36 +291,58 @@ class SettingsActivity : Screen() {
         }.setNegativeButton("Cancel", null).show()
     }
 
-    /** Describe a skin; the AI draws it. */
-    private fun designSkin() {
+    /** Describe a skin; the AI draws it, you see it first, then keep it or try again. */
+    private fun designSkin(again: String? = null) {
         if (!Ai.hasKey(this)) { toast("Making skins with AI needs an AI key (Settings → AI)"); return }
-        val f = Ui.field(this, "e.g. a pizza with sunglasses, a purple galaxy cat, a red soul heart with flames")
+        val f = Ui.field(this, "e.g. a pizza with sunglasses, a purple galaxy cat, a red soul heart with flames").apply { again?.let { setText(it) } }
         Ui.dialog(this).setTitle("Describe your skin").setView(Ui.padded(this, f)).setPositiveButton("Make it") { _, _ ->
             val what = f.text.toString().trim()
-            if (what.isEmpty()) return@setPositiveButton
-            toast("Designing your skin…")
-            val app = applicationContext
-            Thread {
-                var spec: org.json.JSONObject? = null
-                var problem: String? = null
-                // Free AIs sometimes send broken drawings: one more try.
-                for (attempt in 0 until 2) {
-                    try {
-                        spec = SkinArt.parseSpec(Ai.designSkin(app, what))
-                        if (spec != null) break
-                    } catch (e: Ai.Failure) { problem = e.message; break }
-                }
-                runOnUiThread {
-                    if (isFinishing) return@runOnUiThread
-                    val s = spec
-                    if (s == null) { toast(problem ?: "The AI's drawing didn't work. Try again or describe it differently"); return@runOnUiThread }
-                    val id = SkinArt.addDesign(app, s)
-                    Prefs(this).skin = id
-                    refreshBubble(); render()
-                    toast("Made \"${Skins.byId(this, id).title}\" and put it on your bubble")
-                }
-            }.start()
+            if (what.isNotEmpty()) makeSkin(what)
         }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun makeSkin(what: String) {
+        toast("Designing your skin…")
+        val app = applicationContext
+        Thread {
+            var spec: org.json.JSONObject? = null
+            var problem: String? = null
+            // Free AIs sometimes send broken or bare drawings: up to three tries for a proper one.
+            for (attempt in 0 until 3) {
+                try {
+                    spec = SkinArt.parseSpec(Ai.designSkin(app, what), minShapes = 6)
+                    if (spec != null) break
+                } catch (e: Ai.Failure) { problem = e.message; break }
+            }
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                val s = spec
+                if (s == null) { toast(problem ?: "The AI's drawing didn't work. Try again or describe it differently"); return@runOnUiThread }
+                previewSkin(what, s)
+            }
+        }.start()
+    }
+
+    /** Shows the AI's skin before it's kept. */
+    private fun previewSkin(what: String, spec: org.json.JSONObject) {
+        val name = spec.optString("name").trim().ifEmpty { "AI skin" }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            setPadding(0, dp(12), 0, 0)
+            addView(BubbleView(this@SettingsActivity).apply { skin = Skins.fromSpec("preview", name, spec, true) },
+                android.widget.LinearLayout.LayoutParams(dp(140), dp(140)))
+            addView(Ui.text(this@SettingsActivity, name, 15f, p.ink).apply { gravity = android.view.Gravity.CENTER; setPadding(0, dp(8), 0, 0) })
+        }
+        Ui.dialog(this).setTitle("Your new skin").setView(box)
+            .setPositiveButton("Use it") { _, _ ->
+                val id = SkinArt.addDesign(this, spec)
+                Prefs(this).skin = id
+                refreshBubble(); render()
+                toast("Made \"$name\" and put it on your bubble")
+            }
+            .setNeutralButton("Try again") { _, _ -> makeSkin(what) }
+            .setNegativeButton("Cancel", null).show()
     }
 
     @Deprecated("Deprecated in Java")
