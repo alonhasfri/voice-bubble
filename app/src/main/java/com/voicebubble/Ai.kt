@@ -213,7 +213,12 @@ object Ai {
             "names; drop extra words and side details. One message, not several.", max)
 
     /** Designs a bubble skin from a description: a small drawing as JSON (see [SkinArt]). */
-    fun designSkin(c: Context, description: String): String = ask(c, SkinArt.AI_FORMAT, "Design a bubble skin: $description", longAnswer = true)
+    fun designSkin(c: Context, description: String): String = ask(c, SkinArt.AI_FORMAT, SkinArt.request(description),
+        longAnswer = true,
+        // Of the free AIs drawing at once, the first proper drawing wins (not just the fastest answer).
+        accept = { SkinArt.parseSpec(it, minShapes = 8) != null },
+        // A few of the app's own drawn skins as earlier answers: the format and the level of detail to aim for.
+        shots = SkinArt.examplesFor(c, description))
 
     /** Three short replies the user could send next in the chat on screen. */
     fun replies(c: Context, chat: String, instruction: String): List<String> {

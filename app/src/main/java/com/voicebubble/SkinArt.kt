@@ -26,8 +26,8 @@ from the edge). Make it detailed but clear at that small size: 15 to 45 shapes, 
 big base shapes first, then a darker shade on one side, then lighter highlights (a soft white shine, e.g. "#60FFFFFF"),
 then small details (eyes, seeds, sparkles, texture dots). Use a background colour that contrasts with the subject.
 Draw it as your own original take on the idea. Check every coordinate is between 0 and 100.
-Example (a cute frog), for the format and the level of detail:
-{"name":"Frog","background":["#E8F5E9"],"glow":null,"mic":null,"shapes":[{"type":"circle","x":30,"y":30,"r":14,"color":"#66BB6A"},{"type":"circle","x":70,"y":30,"r":14,"color":"#66BB6A"},{"type":"ellipse","x":50,"y":58,"rx":40,"ry":30,"color":"#66BB6A"},{"type":"circle","x":30,"y":30,"r":10,"color":"#FFFFFF"},{"type":"circle","x":70,"y":30,"r":10,"color":"#FFFFFF"},{"type":"circle","x":31,"y":31,"r":6,"color":"#1A1A1A"},{"type":"circle","x":71,"y":31,"r":6,"color":"#1A1A1A"},{"type":"circle","x":33,"y":29,"r":2,"color":"#FFFFFF"},{"type":"circle","x":73,"y":29,"r":2,"color":"#FFFFFF"},{"type":"path","d":"M 26 62 Q 50 80 74 62","color":"#2E7D32","stroke":3},{"type":"circle","x":26,"y":56,"r":4,"color":"#A0F48FB1"},{"type":"circle","x":74,"y":56,"r":4,"color":"#A0F48FB1"}]}
+Work in two steps in your head: first plan the parts (what they are, where, which colours), then write the JSON.
+The earlier answers in this conversation are examples of good skins: match that level of detail.
 Reply with ONLY a JSON object, no other text:
 {
   "name": "short name, 1-3 words",
@@ -46,6 +46,23 @@ Shapes (colours are "#RRGGBB" or "#AARRGGBB"; add "stroke": width to draw only t
 {"type":"text","x":50,"y":60,"size":30,"text":"★","color":"#FFFFFF"}     // x,y = centre of the text"""
 
     class Custom(val id: String, val title: String, val kind: String, val spec: JSONObject?)
+
+    /** What the AI is asked (the same wording for the examples and for your request). */
+    fun request(description: String) = "Design a bubble skin: ${description.trim()}"
+
+    /**
+     * Two or three of the app's own drawn skins as examples: one whose name matches your description if there is
+     * one (ask for a frog, see the frog), plus a face, a food or an object, so it sees different kinds.
+     */
+    fun examplesFor(c: Context, description: String): List<Pair<String, String>> {
+        val all = builtin(c).filter { (it.spec?.optJSONArray("shapes")?.length() ?: 99) <= 45 }
+        if (all.isEmpty()) return emptyList()
+        val words = description.lowercase().split(Regex("[^a-z]+")).filter { it.length >= 3 }.toSet()
+        val match = all.firstOrNull { cs -> cs.title.lowercase().split(Regex("[^a-z]+")).any { it.length >= 3 && it in words } }
+        val picks = (listOfNotNull(match) + listOf("art_frog", "art_pizza", "art_rocket").mapNotNull { id -> all.firstOrNull { it.id == id } })
+            .distinctBy { it.id }.take(3)
+        return picks.map { cs -> request(cs.title.lowercase()) to cs.spec.toString() }
+    }
 
     private fun sp(c: Context) = c.getSharedPreferences("skins", Context.MODE_PRIVATE)
     private fun dir(c: Context) = File(c.filesDir, "skins").apply { mkdirs() }
@@ -103,7 +120,95 @@ Shapes (colours are "#RRGGBB" or "#AARRGGBB"; add "stroke": width to draw only t
             .replace(Regex(",\\s*([}\\]])"), "$1")
         return try {
             JSONObject(json).takeIf { (it.has("background") || it.has("shapes")) && (it.optJSONArray("shapes")?.length() ?: 0) >= minShapes }
+                ?.let { fit(it) }
         } catch (e: Exception) { null }
+    }
+
+    /**
+     * Fixes a drawing the AI made too small or off-centre: everything is scaled and moved so the subject fills the
+     * bubble (about 12 to 88). Shapes that don't make sense are dropped, and there are at most 60.
+     */
+    fun fit(spec: JSONObject): JSONObject {
+        val src = spec.optJSONArray("shapes") ?: return spec
+        val shapes = JSONArray()
+        for (i in 0 until minOf(src.length(), 60)) {
+            val s = src.optJSONObject(i) ?: continue
+            if (s.optString("type") !in setOf("circle", "ellipse", "rect", "line", "polygon", "path", "text")) continue
+            shapes.put(s)
+        }
+        spec.put("shapes", shapes)
+        // The drawing's extent (paths: their absolute points).
+        var x0 = Double.MAX_VALUE; var y0 = Double.MAX_VALUE; var x1 = -Double.MAX_VALUE; var y1 = -Double.MAX_VALUE
+        fun see(x: Double, y: Double) { if (x.isNaN() || y.isNaN()) return; x0 = minOf(x0, x); y0 = minOf(y0, y); x1 = maxOf(x1, x); y1 = maxOf(y1, y) }
+        for (i in 0 until shapes.length()) {
+            val s = shapes.getJSONObject(i)
+            when (s.optString("type")) {
+                "circle" -> { val r = s.optDouble("r"); see(s.optDouble("x") - r, s.optDouble("y") - r); see(s.optDouble("x") + r, s.optDouble("y") + r) }
+                "ellipse" -> { see(s.optDouble("x") - s.optDouble("rx"), s.optDouble("y") - s.optDouble("ry")); see(s.optDouble("x") + s.optDouble("rx"), s.optDouble("y") + s.optDouble("ry")) }
+                "rect" -> { see(s.optDouble("x"), s.optDouble("y")); see(s.optDouble("x") + s.optDouble("w"), s.optDouble("y") + s.optDouble("h")) }
+                "line" -> { see(s.optDouble("x1"), s.optDouble("y1")); see(s.optDouble("x2"), s.optDouble("y2")) }
+                "polygon" -> s.optJSONArray("points")?.let { pts -> for (j in 0 until pts.length()) pts.optJSONArray(j)?.let { see(it.optDouble(0), it.optDouble(1)) } }
+                "text" -> { val h = s.optDouble("size", 20.0) / 2; see(s.optDouble("x") - h, s.optDouble("y") - h); see(s.optDouble("x") + h, s.optDouble("y") + h) }
+                "path" -> pathPoints(s.optString("d")).forEach { (x, y) -> see(x, y) }
+            }
+        }
+        if (x0 == Double.MAX_VALUE) return spec
+        val w = x1 - x0; val h = y1 - y0
+        val cx = (x0 + x1) / 2; val cy = (y0 + y1) / 2
+        val size = maxOf(w, h)
+        // Already fills the bubble and is centred enough: leave it alone.
+        if (size >= 62 && Math.abs(cx - 50) < 10 && Math.abs(cy - 50) < 10) return spec
+        val k = if (size < 62 && size > 1) minOf(76.0 / size, 2.5) else 1.0
+        fun X(v: Double) = 50 + (v - cx) * k
+        fun Y(v: Double) = 50 + (v - cy) * k
+        for (i in 0 until shapes.length()) {
+            val s = shapes.getJSONObject(i)
+            if (s.has("stroke")) s.put("stroke", s.optDouble("stroke") * k)
+            when (s.optString("type")) {
+                "circle" -> { s.put("x", X(s.optDouble("x"))); s.put("y", Y(s.optDouble("y"))); s.put("r", s.optDouble("r") * k) }
+                "ellipse" -> { s.put("x", X(s.optDouble("x"))); s.put("y", Y(s.optDouble("y"))); s.put("rx", s.optDouble("rx") * k); s.put("ry", s.optDouble("ry") * k) }
+                "rect" -> { s.put("x", X(s.optDouble("x"))); s.put("y", Y(s.optDouble("y"))); s.put("w", s.optDouble("w") * k); s.put("h", s.optDouble("h") * k)
+                    if (s.has("radius")) s.put("radius", s.optDouble("radius") * k) }
+                "line" -> { s.put("x1", X(s.optDouble("x1"))); s.put("y1", Y(s.optDouble("y1"))); s.put("x2", X(s.optDouble("x2"))); s.put("y2", Y(s.optDouble("y2")))
+                    if (s.has("width")) s.put("width", s.optDouble("width") * k) }
+                "polygon" -> s.optJSONArray("points")?.let { pts -> for (j in 0 until pts.length()) pts.optJSONArray(j)?.let { p ->
+                    pts.put(j, JSONArray().put(X(p.optDouble(0))).put(Y(p.optDouble(1)))) } }
+                "text" -> { s.put("x", X(s.optDouble("x"))); s.put("y", Y(s.optDouble("y"))); s.put("size", s.optDouble("size", 20.0) * k) }
+                "path" -> s.put("d", movePath(s.optString("d"), ::X, ::Y, k))
+            }
+        }
+        return spec
+    }
+
+    private val pathTok = Regex("[MLHVQCZmlhvqcz]|-?\\d*\\.?\\d+(?:e-?\\d+)?")
+
+    /** The absolute points of a path (enough to see how big it is). */
+    private fun pathPoints(d: String): List<Pair<Double, Double>> {
+        val out = ArrayList<Pair<Double, Double>>()
+        var cmd = 'M'; var pending: Double? = null
+        for (t in pathTok.findAll(d).map { it.value }) {
+            if (t[0].isLetter()) { cmd = t[0]; pending = null; continue }
+            val v = t.toDoubleOrNull() ?: continue
+            if (cmd.isLowerCase() || cmd == 'H' || cmd == 'V') continue
+            if (pending == null) pending = v else { out += pending!! to v; pending = null }
+        }
+        return out
+    }
+
+    /** A path scaled and moved like the rest (absolute points moved, relative steps only scaled). */
+    private fun movePath(d: String, X: (Double) -> Double, Y: (Double) -> Double, k: Double): String {
+        val sb = StringBuilder()
+        var cmd = 'M'; var n = 0
+        for (t in pathTok.findAll(d).map { it.value }) {
+            if (t[0].isLetter()) { cmd = t[0]; n = 0; sb.append(t).append(' '); continue }
+            val v = t.toDoubleOrNull() ?: continue
+            val abs = cmd.isUpperCase()
+            val isX = when (cmd.uppercaseChar()) { 'H' -> true; 'V' -> false; else -> n % 2 == 0 }
+            val nv = if (!abs) v * k else if (isX) X(v) else Y(v)
+            sb.append("%.1f".format(java.util.Locale.US, nv)).append(' ')
+            n++
+        }
+        return sb.toString().trim()
     }
 
     fun addDesign(c: Context, spec: JSONObject): String {

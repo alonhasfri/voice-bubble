@@ -364,3 +364,22 @@ class SkinDetailTest {
         assertNull(SkinArt.parseSpec("""{"background":["#000000"],"shapes":[{"type":"circle","x":50,"y":50,"r":10,"color":"#FFFFFF"}]}""", minShapes = 6))
     }
 }
+
+class SkinFitTest {
+    @Test fun smallDrawingIsMadeBig() {
+        // A tiny face in the corner.
+        val spec = SkinArt.parseSpec("""{"background":["#000000"],"shapes":[
+            {"type":"circle","x":20,"y":20,"r":10,"color":"#FFFF00"},
+            {"type":"path","d":"M 14 22 Q 20 28 26 22","color":"#000000","stroke":1}]}""")!!
+        val c = spec.getJSONArray("shapes").getJSONObject(0)
+        assertEquals(50.0, c.getDouble("x"), 0.5)
+        assertEquals(50.0, c.getDouble("y"), 0.5)
+        assertEquals(true, c.getDouble("r") > 30)
+        assertEquals(true, spec.getJSONArray("shapes").getJSONObject(1).getString("d").startsWith("M"))
+    }
+
+    @Test fun bigDrawingStays() {
+        val spec = SkinArt.parseSpec("""{"background":["#000000"],"shapes":[{"type":"circle","x":50,"y":50,"r":40,"color":"#FFFF00"}]}""")!!
+        assertEquals(40.0, spec.getJSONArray("shapes").getJSONObject(0).getDouble("r"), 0.01)
+    }
+}
