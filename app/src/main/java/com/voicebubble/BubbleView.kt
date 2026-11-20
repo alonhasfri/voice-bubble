@@ -83,7 +83,7 @@ object Skins {
             "image" -> {
                 val bmp = pictures.getOrPut(cs.id) { android.graphics.BitmapFactory.decodeFile(SkinArt.imageFile(c, cs.id).path) }
                     ?: return@mapNotNull null
-                // Your picture with the microphone on top (over a soft dark circle, so it shows on any picture).
+                // Your picture with the microphone on top.
                 Skin(cs.id, cs.title, Color.BLACK, pattern = "image", image = bmp, showMic = true, custom = true)
             }
             "ai" -> cs.spec?.let { fromSpec(cs.id, cs.title, it, true) }
@@ -224,9 +224,6 @@ class BubbleView(context: Context) : View(context) {
             "image" -> skin.image?.let { bmp ->
                 c.save(); c.clipPath(shapePath(cx, cy, r))
                 c.drawBitmap(bmp, null, RectF(cx - r, cy - r, cx + r, cy + r), Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
-                // A soft dark circle in the middle so the microphone shows on any picture.
-                pat.color = Color.argb(110, 30, 30, 30)
-                c.drawCircle(cx, cy, r * 0.62f, pat)
                 c.restore()
             }
             "art" -> skin.art?.let { spec ->
@@ -594,12 +591,7 @@ class BubbleView(context: Context) : View(context) {
         if (skin.pattern == "savepoint") drawSparkle(c, cx, cy, r * 0.62f * pulse, Color.rgb(255, 225, 70))
         if (skin.pattern == "soul") drawHeart(c, cx, cy + r * 0.05f, r * 0.5f * pulse, Color.rgb(255, 20, 30))
         if (hidesMic && !micOnAll) { keepMoving(); return }
-        if (hidesMic) {
-            // A soft dark circle under it, so it shows on any picture.
-            iconFill.color = Color.argb(120, 25, 25, 30)
-            c.drawCircle(cx, cy + oy, r * 0.55f, iconFill)
-            icon.color = Color.WHITE; iconFill.color = Color.WHITE
-        }
+        if (hidesMic) { icon.color = Color.WHITE; iconFill.color = Color.WHITE }
 
         // Microphone icon.
         icon.strokeWidth = 2.4f * s
