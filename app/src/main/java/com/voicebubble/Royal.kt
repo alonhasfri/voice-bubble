@@ -66,7 +66,9 @@ object Royal {
     }
     private val opener = Regex("^(?i)(hark|pray|nay|aye|good morrow|fare thee well|we thank thee|hear ye|forsooth|verily|hold thy tongue|begone|approach)\\b")
 
-    fun apply(text: String): String {
+    /** [level]: 0 low (only the old words), 1 medium, 2 intense, 3 extreme. */
+    fun apply(text: String, level: Int = 1): String {
+        val lv = level.coerceIn(0, 3)
         var t = text.trim()
         if (t.isEmpty()) return t
         for ((re, to) in rules) {
@@ -82,6 +84,15 @@ object Royal {
         // "thou" takes the old verb ending: "thou want" → "thou wantest".
         t = Regex("(?i)\\b(thou)\\s+(want|need|desire|require|know|think|like|love|see|say|go|come|make|take|get|give|feel|play|run|tell|call|hope|wish|mean|bring|send|speak)\\b")
             .replace(t) { m -> m.groupValues[1] + " " + m.groupValues[2] + if (m.groupValues[2].endsWith("e")) "st" else "est" }
+        if (lv == 0) return t
+        // Intense and up: every later sentence starts royally too.
+        if (lv >= 2) {
+            var k = 0
+            t = Regex("([.!])\\s+(\\p{Lu})").replace(t) { m ->
+                k++
+                m.groupValues[1] + " " + listOf("Forsooth, ", "Verily, ", "Mark Us, ")[k % 3] + m.groupValues[2].lowercase()
+            }
+        }
         // A royal opening (not when it already starts royally), the same one for the same words.
         val pick = (t.hashCode() and 0x7fffffff)
         if (!opener.containsMatchIn(t)) {
@@ -95,8 +106,10 @@ object Royal {
         // And a royal closing, when it's a statement.
         if (!t.contains('?')) {
             t = t.trimEnd().let { if (it.last() in ".!") it else "$it." } +
-                listOf(" So We decree.", " Let it be known.", " Thus speaketh the Crown.", " So be it.")[(pick / 4) % 4]
+                if (lv == 3) " So We decree, and so shall it be, forevermore!"
+                else listOf(" So We decree.", " Let it be known.", " Thus speaketh the Crown.", " So be it.")[(pick / 4) % 4]
         }
+        if (lv == 3) t = "Hear ye, hear ye! $t"
         return t
     }
 

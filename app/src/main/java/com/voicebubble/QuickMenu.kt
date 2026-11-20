@@ -137,6 +137,10 @@ class QuickMenu(
             prefs.persona = it
             changed(if (it == null) "Normal voice" else "Talking like $it")
         }
+        title("Character intensity")
+        choices(listOf(0 to "Low", 1 to "Medium", 2 to "Intense", 3 to "Extreme"), prefs.charIntensity) {
+            prefs.charIntensity = it; changed("Intensity: ${listOf("Low", "Medium", "Intense", "Extreme")[it]}")
+        }
         title("AI text length")
         choices(Ai.lengths.map { it.first to it.second.replace(" (AI decides)", "") }, prefs.aiLength) {
             prefs.aiLength = it; changed("Length: ${Ai.lengthName(it)}")

@@ -815,13 +815,13 @@ class BubbleService : Service() {
             }
             s.plain = text
             if (text != null && Royal.wanted(persona) && !Characters.isMix(persona!!) && (prefs.instantRoyal || !Ai.hasKey(this))) {
-                text = Royal.apply(text)   // instant, no AI
+                text = Royal.apply(text, prefs.charIntensity)   // instant, no AI
             } else if (text != null && Instant.has(persona) && !Characters.isMix(persona!!) && (prefs.instantChars || !Ai.hasKey(this))) {
-                text = Instant.apply(persona!!, text) ?: text   // instant character, no AI
+                text = Instant.apply(persona!!, text, prefs.charIntensity) ?: text   // instant character, no AI
             } else if (text != null && persona != null && Ai.hasKey(this)) {
                 text = try { Ai.rewrite(this, text, Royal.instruction(persona, this), s.limit, who = persona) } catch (e: Ai.Failure) {
                     // The AI went wrong: the instant version of the character if there is one, else your own words.
-                    val instant = if (!Characters.isMix(persona)) Instant.apply(persona, text!!) else null
+                    val instant = if (!Characters.isMix(persona)) Instant.apply(persona, text!!, prefs.charIntensity) else null
                     problem = if (instant != null) "AI character didn't work this time, used the instant one" else e.message
                     instant ?: text
                 }
@@ -1153,7 +1153,7 @@ class BubbleService : Service() {
         val text = fresh ?: lastText ?: run { toast("Dictate something first, then ask to rewrite it"); return }
         // Royal English can be done instantly on the phone.
         if (Royal.wanted(instruction) && (prefs.instantRoyal || !Ai.hasKey(this))) {
-            val out = Royal.apply(text)
+            val out = Royal.apply(text, prefs.charIntensity)
             if (fresh != null) deliver(out)
             else if (InsertService.instance?.replaceLast(out) == true) { lastText = out; buzz(15); showUndo() }
             else { lastText = out; copyOut(out); toast("Copied: paste it over the old one") }
@@ -1162,7 +1162,7 @@ class BubbleService : Service() {
         // Instant characters, no AI ("make me sound like Spamton" with no key, or instant characters on).
         val who = Regex("(?i)^make me sound like\\s+(.+)$").find(instruction.trim())?.groupValues?.get(1)
         if (who != null && Instant.has(who) && !Characters.isMix(who) && (prefs.instantChars || !Ai.hasKey(this))) {
-            val out = Instant.apply(who, text) ?: text
+            val out = Instant.apply(who, text, prefs.charIntensity) ?: text
             if (fresh != null) deliver(out, limit)
             else if (InsertService.instance?.replaceLast(out) == true) { lastText = out; buzz(15); showUndo() }
             else { lastText = out; copyOut(out); toast("Copied: paste it over the old one") }

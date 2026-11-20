@@ -80,6 +80,16 @@ object Ai {
         else -> maxOf(90, (textLen * 1.8).toInt())   // "as I said it": about as long as what you said
     }
 
+    /** How strongly the character comes through (the intensity setting). */
+    private fun intensityNote(c: Context): String = when (Prefs(c).charIntensity) {
+        0 -> "\n\nIntensity: LOW. A light touch: mostly my own plain words, with just one small touch of the character's voice."
+        2 -> "\n\nIntensity: INTENSE. Strongly in character: their habits in every sentence and two or three of their catchphrases."
+        3 -> "\n\nIntensity: EXTREME. As much of the character as possible: their style on almost every word, their " +
+            "spelling and capital-letter habits everywhere, several catchphrases, the most over-the-top version of them. " +
+            "Still only what my message says, nothing new."
+        else -> ""
+    }
+
     /** Your dictionary words, so the AI spells them your way. */
     private fun namesNote(c: Context): String {
         val words = Words.dictionary(c).take(40)
@@ -98,7 +108,9 @@ object Ai {
     fun rewrite(c: Context, text: String, instruction: String, maxChars: Int? = null, who: String? = null): String {
         // A one-off "make this shorter" wins over the lasting length.
         val ownLength = Regex("(?i)\\b(short|long|length|brief|expand)").containsMatchIn(instruction)
-        val cap = listOfNotNull(maxChars, if (ownLength) null else lengthCap(c, text.length)).minOrNull()
+        // A character turned up high needs room for its catchphrases.
+        val room = if (who != null) listOf(0.8, 1.0, 1.4, 2.0)[Prefs(c).charIntensity] else 1.0
+        val cap = listOfNotNull(maxChars, if (ownLength) null else lengthCap(c, text.length)?.let { (it * room).toInt() }).minOrNull()
         val system = "You rewrite a chat message someone dictated by voice, before they send it. You are NOT chatting with " +
             "them: never answer the message, reply to it or react to it. Your output is the SAME message (same meaning, " +
             "same requests, questions, facts, names, times and places), just rewritten the way the instruction says. " +
@@ -108,7 +120,8 @@ object Ai {
             "said; a few touches, natural and easy to read, not a quirk on every word, not just catchphrases on their own. " +
             "Reply with only the rewritten message: no quotes, no explanation.\n\nInstruction: $instruction"
         fun user(extra: String, msg: String = text) = "The message to rewrite:\n<message>\n$msg\n</message>" +
-            (if (ownLength) "" else lengthNote(c, "rewrite")) + limitNote(cap) + chatNote(c) + namesNote(c) + extra +
+            (if (ownLength) "" else lengthNote(c, "rewrite")) + limitNote(cap) + chatNote(c) + namesNote(c) +
+            (if (who != null) intensityNote(c) else "") + extra +
             "\n\nNow write that same message, rewritten as instructed. Only the rewritten message."
         // Of the AIs that answer, the first that kept your message wins (not just the fastest).
         val keeps = { o: String -> keepsMeaning(text, clean(o)) }
@@ -138,7 +151,7 @@ object Ai {
      */
     fun keepsMeaning(original: String, rewrite: String): Boolean {
         // Way longer than what you said: it added its own story.
-        if (rewrite.length > original.length * 4 + 80) return false
+        if (rewrite.length > original.length * 6 + 120) return false
         val words = original.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 4 && it !in small }.distinct()
         if (words.size < 2) return true
         val out = rewrite.lowercase()

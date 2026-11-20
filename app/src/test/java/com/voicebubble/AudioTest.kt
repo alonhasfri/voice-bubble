@@ -331,3 +331,19 @@ class ExamplesTest {
         }
     }
 }
+
+class IntensityTest {
+    @Test fun levels() {
+        val said = "I want to get pizza with my friends tonight."
+        val low = Instant.apply("Spamton", said, 0)!!
+        val extreme = Instant.apply("Spamton", said, 3)!!
+        assertEquals(false, low.startsWith("HEY"))
+        assertEquals(true, extreme.contains("SPAMTON G. SPAMTON"))
+        assertEquals(true, extreme.length > Instant.apply("Spamton", said, 1)!!.length)
+        assertEquals("i'm tired", Instant.apply("Sans", "I'm tired", 0))
+        assertEquals(true, Royal.apply("I need food right now.", 3).startsWith("Hear ye, hear ye!"))
+        assertEquals(false, Royal.apply("I need food right now.", 0).contains("decree"))
+        // Every level still says what you said.
+        for (lv in 0..3) for (who in Instant.supported) assertEquals("$who $lv", true, Ai.keepsMeaning(said, Instant.apply(who, said, lv)!!))
+    }
+}

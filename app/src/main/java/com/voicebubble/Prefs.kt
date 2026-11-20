@@ -153,6 +153,10 @@ class Prefs(private val ctx: Context) {
             // Remembered for the bubble's character picker (newest first).
             if (who != null) p.edit().putString("recentPersonas", (listOf(who) + recentPersonas.filter { it != who }).take(6).joinToString("\n")).apply()
         }
+    /** How strongly characters (and Royal English) come through: 0 low, 1 medium, 2 intense, 3 extreme. */
+    var charIntensity: Int
+        get() = p.getInt("charIntensity", 1)
+        set(v) = p.edit().putInt("charIntensity", v.coerceIn(0, 3)).apply()
     /** Characters you used lately, newest first. */
     val recentPersonas: List<String>
         get() = p.getString("recentPersonas", "")!!.lines().filter { it.isNotBlank() }
