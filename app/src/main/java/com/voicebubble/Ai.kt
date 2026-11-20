@@ -95,7 +95,7 @@ object Ai {
                 "Keep the character's voice with clean words: their [[brackets]], CAPS and quirks are fine."
         else ""
 
-    fun rewrite(c: Context, text: String, instruction: String, maxChars: Int? = null): String {
+    fun rewrite(c: Context, text: String, instruction: String, maxChars: Int? = null, who: String? = null): String {
         // A one-off "make this shorter" wins over the lasting length.
         val ownLength = Regex("(?i)\\b(short|long|length|brief|expand)").containsMatchIn(instruction)
         val cap = listOfNotNull(maxChars, if (ownLength) null else lengthCap(c, text.length)).minOrNull()
@@ -107,17 +107,19 @@ object Ai {
             "that character would say it: their grammar, typical words, habits and catchphrases woven into what was " +
             "said; a few touches, natural and easy to read, not a quirk on every word, not just catchphrases on their own. " +
             "Reply with only the rewritten message: no quotes, no explanation.\n\nInstruction: $instruction"
-        fun user(extra: String) = "The message to rewrite:\n<message>\n$text\n</message>" +
+        fun user(extra: String, msg: String = text) = "The message to rewrite:\n<message>\n$msg\n</message>" +
             (if (ownLength) "" else lengthNote(c, "rewrite")) + limitNote(cap) + chatNote(c) + namesNote(c) + extra +
             "\n\nNow write that same message, rewritten as instructed. Only the rewritten message."
         // Of the AIs that answer, the first that kept your message wins (not just the fastest).
         val keeps = { o: String -> keepsMeaning(text, clean(o)) }
-        var out = clean(ask(c, system, user(""), accept = keeps, careful = true))
+        // The character's examples, as earlier messages: the voice, without their words ending up in yours.
+        val shots = who?.let { Characters.examplesFor(it, c) }.orEmpty().map { (q, a) -> user("", q) to a }
+        var out = clean(ask(c, system, user(""), accept = keeps, careful = true, shots = shots))
         // The AI said its own thing instead of your message: once more, firmly.
         if (!keepsMeaning(text, out)) {
             val again = runCatching { clean(ask(c, system, user("\n\nImportant: your last answer didn't say what the message " +
                 "says. Keep every point of the message, in the same order. Don't replace it with the character's usual " +
-                "lines or catchphrases; rewrite what it says."), accept = keeps, careful = true)) }.getOrNull()
+                "lines or catchphrases; rewrite what it says."), accept = keeps, careful = true, shots = shots)) }.getOrNull()
             // Still not your message: nothing random gets typed.
             out = again?.takeIf { keepsMeaning(text, it) } ?: throw MeaningLost()
         }
@@ -228,24 +230,27 @@ object Ai {
      * fastest). [careful]: a lower "temperature", so it follows instructions instead of getting creative.
      */
     private fun ask(c: Context, system: String, user: String, longAnswer: Boolean = false,
-                    accept: ((String) -> Boolean)? = null, careful: Boolean = false): String {
+                    accept: ((String) -> Boolean)? = null, careful: Boolean = false,
+                    /** Earlier messages to learn from: (what was asked, the answer). */
+                    shots: List<Pair<String, String>> = emptyList()): String {
         val k = key(c)
         if (k.isEmpty()) throw Failure("Add an AI key first (Settings → AI)")
         val text = when {
-            k.startsWith("sk-ant") -> claude(k, system, user, Prefs(c).aiFast)
-            k.startsWith("sk-or-") -> openRouter(k, system, user, longAnswer, accept, careful)
-            else -> gemini(k, system, user)
+            k.startsWith("sk-ant") -> claude(k, system, user, Prefs(c).aiFast, shots)
+            k.startsWith("sk-or-") -> openRouter(k, system, user, longAnswer, accept, careful, shots)
+            else -> gemini(k, system, user, shots)
         }
         return text.trim().ifEmpty { throw Failure("The AI sent back nothing. Try again") }
     }
 
-    private fun claude(key: String, system: String, user: String, fast: Boolean): String {
+    private fun claude(key: String, system: String, user: String, fast: Boolean, shots: List<Pair<String, String>> = emptyList()): String {
         val client = AnthropicOkHttpClient.builder().apiKey(key).timeout(Duration.ofSeconds(60)).build()
         try {
             val builder = MessageCreateParams.builder()
                 .model(if (fast) "claude-haiku-5-5" else "claude-opus-5-5")
                 .maxTokens(4000L)
                 .system(system)
+                .apply { shots.forEach { (q, a) -> addUserMessage(q); addAssistantMessage(a) } }
                 .addUserMessage(user)
                 // Short edits don't need deep thinking: low effort keeps it quick and cheap.
                 .outputConfig(BetaOutputConfig.builder().effort(BetaOutputConfig.Effort.LOW).build())
@@ -283,7 +288,8 @@ object Ai {
     )
 
     private fun openRouter(key: String, system: String, user: String, longAnswer: Boolean = false,
-                           accept: ((String) -> Boolean)? = null, careful: Boolean = false): String {
+                           accept: ((String) -> Boolean)? = null, careful: Boolean = false,
+                           shots: List<Pair<String, String>> = emptyList()): String {
         val maxTokens = if (longAnswer) 3000 else (user.length * 2 + 300).coerceAtMost(1500)
         // Free models are often slow only because they're busy: ask two at once and take the first answer.
         val racers = openRouterModels.take(2)
@@ -292,7 +298,7 @@ object Ai {
         val authError = java.util.concurrent.atomic.AtomicReference<Failure?>(null)
         racers.forEach { m ->
             done.submit(java.util.concurrent.Callable<String?> {
-                try { openRouterOnce(key, m, system, user, maxTokens, careful) } catch (e: Failure) { authError.set(e); null }
+                try { openRouterOnce(key, m, system, user, maxTokens, careful, shots) } catch (e: Failure) { authError.set(e); null }
             })
         }
         var fallback: String? = null
@@ -311,13 +317,13 @@ object Ai {
         }
         fallback?.let { return it }
         // Both busy or gone: let OpenRouter pick any free model.
-        return openRouterOnce(key, openRouterModels.last(), system, user, maxTokens, careful)
+        return openRouterOnce(key, openRouterModels.last(), system, user, maxTokens, careful, shots)
             ?: throw Failure("OpenRouter's free models are busy. Try again in a moment")
     }
 
     /** One request to one model. Null when that model is busy or unavailable; throws for a bad key. */
     private fun openRouterOnce(key: String, model: String, system: String, user: String, maxTokens: Int,
-                               careful: Boolean = false): String? {
+                               careful: Boolean = false, shots: List<Pair<String, String>> = emptyList()): String? {
         for (noThinking in listOf(true, false)) {
             try {
                 val body = JSONObject()
@@ -326,6 +332,10 @@ object Ai {
                     .apply { if (careful) put("temperature", 0.4) }
                     .put("messages", JSONArray()
                         .put(JSONObject().put("role", "system").put("content", system))
+                        .apply { shots.forEach { (q, a) ->
+                            put(JSONObject().put("role", "user").put("content", q))
+                            put(JSONObject().put("role", "assistant").put("content", a))
+                        } }
                         .put(JSONObject().put("role", "user").put("content", user)))
                 if (noThinking) body.put("reasoning", JSONObject().put("enabled", false))
                 val conn = URL("https://openrouter.ai/api/v1/chat/completions").openConnection() as HttpURLConnection
@@ -353,11 +363,17 @@ object Ai {
         return null
     }
 
-    private fun gemini(key: String, system: String, user: String): String {
+    private fun gemini(key: String, system: String, user: String, shots: List<Pair<String, String>> = emptyList()): String {
         try {
             val body = JSONObject()
                 .put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))))
-                .put("contents", JSONArray().put(JSONObject().put("parts", JSONArray().put(JSONObject().put("text", user)))))
+                .put("contents", JSONArray().apply {
+                    shots.forEach { (q, a) ->
+                        put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", q))))
+                        put(JSONObject().put("role", "model").put("parts", JSONArray().put(JSONObject().put("text", a))))
+                    }
+                    put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", user))))
+                })
                 // No "thinking" first: it adds seconds and isn't needed to rewrite or translate a sentence.
                 .put("generationConfig", JSONObject().put("thinkingConfig", JSONObject().put("thinkingBudget", 0)))
             // Flash-Lite: Google's quickest model, plenty for rewriting and translating.

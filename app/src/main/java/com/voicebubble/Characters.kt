@@ -102,6 +102,67 @@ Example: "Can you help me?" → "Hah. You dare ask the King of Curses for help, 
 """),
     )
 
+    /**
+     * Two before → after examples per character. They only change HOW it's said, never what: the AI sees them
+     * as earlier messages, so it learns the voice without copying the words into your message.
+     */
+    private val examples: Map<String, List<Pair<String, String>>> = mapOf(
+        "rouxls" to listOf("I'll be home at 6" to "Hark, Worm!! Thy Duke shalt Returneth Home at the sixth Hour-eth!!",
+            "Can you send me the picture?" to "Thou! Canst thou Sendeth unto me the Picture-eth, Worm?!"),
+        "spamton" to listOf("Want to get pizza later?" to "HEY KID!! YOU WANT [[Delicious Pizza]] LATER??",
+            "I'm on my way" to "I'M ON MY [[Way To Success]]!! [[Click Here]]"),
+        "flowey" to listOf("I can't come today" to "Howdy! Golly, you can't come today? Hee hee hee.",
+            "Good job on the test" to "Golly, good job on the test, pal. You REALLY did it."),
+        "sans" to listOf("I'm going to sleep" to "heh. gonna sleep, kid.",
+            "Did you finish the homework?" to "you finish the homework, buddo?"),
+        "papyrus" to listOf("See you tomorrow" to "NYEH HEH HEH! SEE YOU TOMORROW!",
+            "I made pasta" to "THE GREAT PAPYRUS MADE PASTA!"),
+        "jevil" to listOf("I'm bored" to "BORED, BORED! UEE HEE HEE! I'M BORED!",
+            "Let's play" to "LET'S PLAY, LET'S PLAY! CHAOS, CHAOS!"),
+        "lancer" to listOf("Let's go to the park" to "Ho ho ho! Lancer here! Let's go to the park!",
+            "I won" to "Ho ho ho! I WON, like a true bad guy!"),
+        "undyne" to listOf("I'll cook dinner" to "NGAHHH!! I'LL COOK DINNER, PUNK!!",
+            "Hurry up" to "HURRY UP, PUNK!!"),
+        "temmie" to listOf("I got paid" to "hOI!! tem got PAID!!", "I love this" to "tem LOVES dis!!"),
+        "susie" to listOf("Thanks for helping" to "...Heh. Thanks for helping, dude.", "Let's go" to "C'mon. Let's go."),
+        "ralsei" to listOf("I failed my test" to "Oh... I-I failed my test... um, sorry!",
+            "Can we meet later?" to "Um, c-can we meet later? Only if that's okay!"),
+        "gojo" to listOf("This test is hard" to "Hard? Nah, I'd win.", "I'm on my way" to "Relax, the strongest is on his way."),
+        "sukuna" to listOf("Can you help me?" to "Hah. Help me, brat.", "I'm busy" to "I am busy. Know your place, fool."),
+        "royal" to listOf("I'm on my way" to "Hark! We are upon Our way anon. Let it be known.",
+            "Do you want to eat?" to "Pray tell, dost thou desire to dine with Us?"),
+    )
+
+    /** The examples for [who] (your own characters: the "Example:" line in their guide, if any). */
+    fun examplesFor(who: String, c: android.content.Context? = null): List<Pair<String, String>> {
+        if (isMix(who)) return emptyList()
+        if (Royal.wanted(who)) return examples.getValue("royal")
+        c?.let { ctx ->
+            custom(ctx).entries.firstOrNull { it.key.equals(who.trim(), true) }?.let { e ->
+                val m = Regex("(?i)Example:\\s*[\"“](.+?)[\"”]\\s*(?:→|->)\\s*[\"“](.+)[\"”]").find(e.value) ?: return emptyList()
+                return listOf(m.groupValues[1] to m.groupValues[2])
+            }
+        }
+        val n = norm(who)
+        val key = when {
+            n.startsWith("rouxls") || n.startsWith("rules card") -> "rouxls"
+            n.startsWith("spamton") -> "spamton"
+            n.startsWith("flowey") || n.startsWith("flowery") -> "flowey"
+            n == "sans" -> "sans"
+            n.startsWith("papyrus") || n.startsWith("the great papyrus") -> "papyrus"
+            n == "jevil" -> "jevil"
+            n == "lancer" -> "lancer"
+            n == "undyne" -> "undyne"
+            n == "temmie" -> "temmie"
+            n == "susie" -> "susie"
+            n == "ralsei" -> "ralsei"
+            n.contains("gojo") -> "gojo"
+            n.contains("sukuna") -> "sukuna"
+            else -> null
+        }
+        return key?.let { examples[it] } ?: emptyList()
+    }
+
     /** The ready-made "talk like" list (in the app and in the bubble's character picker). */
     val presets = listOf(
         // Deltarune & Undertale

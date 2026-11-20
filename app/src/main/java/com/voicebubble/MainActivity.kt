@@ -257,7 +257,7 @@ class MainActivity : Screen() {
             rows += Ui.switchRow(this, look.first, look.second, f.title, sub, Features.isOn(this, f)) { on -> Features.set(this, f, on) }
         }
         rows += Ui.row(this, R.drawable.ui_user, "orange", "Talk like", value = prefs.persona ?: "Off",
-            sub = if (prefs.persona != null && !Ai.hasKey(this)) "Needs an AI key (Settings → AI)" else "Rewrite everything you say in someone's voice. Quick switch: swipe down on the bubble") {
+            sub = if (prefs.persona != null && !Ai.hasKey(this)) "Needs an AI key (Settings → AI)" else "Rewrite everything you say in someone's voice. Quick menu: swipe down on the bubble") {
             pickPersona()
         }
         val langs = listOf("Off", "English", "Hebrew", "Spanish", "French", "German", "Italian", "Portuguese", "Arabic",

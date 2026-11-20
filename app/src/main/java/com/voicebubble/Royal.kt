@@ -10,19 +10,24 @@ object Royal {
     const val NAME = "a 1500s royal"
 
     /** The instruction for the AI version. (No length words in it: those come from the length setting.) */
-    const val AI = "Make me sound like a sophisticated English royal of the 1500s. " +
-        "Use elevated, ornate Early Modern English, not quotes or lines from plays: the royal 'We', 'Us' and 'Our' " +
-        "for myself; 'thou', 'thee' and 'thy' for the listener; words such as hark, pray, prithee, forsooth, " +
-        "verily, mayhap, wherefore, henceforth and it pleaseth Us. Grand, refined and gracious. " +
-        "Don't call anyone a peasant or a subject, or talk down to them: speak to them as you would to anyone. " +
-        "Keep what I meant and keep any names."
+    const val AI = "Make me sound like a grand English monarch of the 1500s, fully and richly: every sentence in " +
+        "ornate Early Modern English, never a plain modern sentence. The royal 'We', 'Us' and 'Our' for myself; " +
+        "'thou', 'thee', 'thy' and 'thine' for the listener, with the old verb forms (thou art, thou hast, thou dost, " +
+        "thou wilt, thou canst, thou knowest, thou wouldst; he hath, she doth, it pleaseth, he saith, she cometh). " +
+        "Old words throughout: methinks, prithee, forsooth, verily, 'tis, 'twas, anon, ere, hither, thither, whence, " +
+        "wherefore, aught, naught, mayhap, perchance, betwixt, nay, aye, hark. Stately word order (\"Much doth it " +
+        "please Us\", \"Fain would We know\"), a royal opening and, where it fits, a closing flourish such as " +
+        "\"So We decree.\" or \"Let it be known.\" Majestic, proud and gracious, not quotes from plays. " +
+        "Don't call anyone a peasant or a subject, or talk down to them. Keep what I meant and keep any names."
 
     // Order matters: longer phrases first, "I"/"me"/"my" last.
     private val swaps: List<Pair<String, String>> = listOf(
         // The royal "We".
         "I am" to "We are", "I'm" to "We are", "am I" to "are We", "I was" to "We were", "was I" to "were We",
         "I've" to "We have", "I'll" to "We shall", "I will" to "We shall", "I'd" to "We would",
-        "I want" to "We desire", "I need" to "We require", "I think" to "We deem",
+        "I want" to "We desire", "I need" to "We require", "I think" to "Methinks", "I know" to "We know full well",
+        "you know" to "thou knowest", "do you know" to "knowest thou", "I hope" to "We fain would hope",
+        "I guess" to "We suppose", "I love" to "We do dearly love",
         "give me" to "bring unto Us", "tell me" to "inform Us", "let me know" to "inform Us", "let me" to "permit Us to",
         "my house" to "Our castle", "your house" to "thy dwelling", "my friend" to "Our dear friend",
         // To the listener.
@@ -49,6 +54,11 @@ object Royal {
         "car" to "carriage", "phone" to "talking-glass", "cool" to "most splendid", "awesome" to "most splendid",
         "amazing" to "most splendid", "bad" to "most foul", "stupid" to "witless", "idiot" to "knave",
         "soon" to "anon", "listen" to "hark", "kill" to "slay", "fight" to "duel",
+        "says" to "saith", "goes" to "goeth", "comes" to "cometh", "makes" to "maketh", "takes" to "taketh",
+        "knows" to "knoweth", "seems" to "seemeth", "looks" to "looketh", "gives" to "giveth", "tells" to "telleth",
+        "between" to "betwixt", "today" to "this day", "tonight" to "this night",
+        "tomorrow" to "on the morrow", "now" to "anon", "never" to "ne'er", "over" to "o'er", "even" to "e'en",
+        "something" to "somewhat", "whatever" to "whatsoever", "let's" to "let us", "lots of" to "a great many",
         "myself" to "Ourselves", "my" to "Our", "mine" to "Ours", "me" to "Us", "I" to "We",
     )
     private val rules = swaps.map { (from, to) ->
@@ -69,12 +79,23 @@ object Royal {
         t = Regex("(^|[.!?]\\s+)[Nn]o\\b(?=[,.!?]|\\s*$)").replace(t) { it.groupValues[1] + "Nay" }
         // "you" as the one doing something is "thou": at the start of a sentence, "thee" becomes "thou".
         t = Regex("(^|[.!?]\\s+)Thee\\b").replace(t) { it.groupValues[1] + "Thou" }
-        // A royal opening (not when it already starts royally).
+        // "thou" takes the old verb ending: "thou want" → "thou wantest".
+        t = Regex("(?i)\\b(thou)\\s+(want|need|desire|require|know|think|like|love|see|say|go|come|make|take|get|give|feel|play|run|tell|call|hope|wish|mean|bring|send|speak)\\b")
+            .replace(t) { m -> m.groupValues[1] + " " + m.groupValues[2] + if (m.groupValues[2].endsWith("e")) "st" else "est" }
+        // A royal opening (not when it already starts royally), the same one for the same words.
+        val pick = (t.hashCode() and 0x7fffffff)
         if (!opener.containsMatchIn(t)) {
             val end = t.indexOfFirst { it in ".!?" }
-            t = if (end >= 0 && t[end] == '?') {
-                "Pray tell, " + if (Regex("^(We|Us|Our|Ours)\\b").containsMatchIn(t)) t else t.replaceFirstChar { it.lowercaseChar() }
-            } else "Verily, " + if (Regex("^(We|Us|Our|Ours|I)\\b").containsMatchIn(t)) t else t.replaceFirstChar { it.lowercaseChar() }
+            val keepCap = Regex("^(We|Us|Our|Ours|I)\\b").containsMatchIn(t)
+            val rest = if (keepCap) t else t.replaceFirstChar { it.lowercaseChar() }
+            val open = listOf("Verily, ", "Hark! ", "Hear Us, ", "Forsooth, ")[pick % 4]
+            t = if (end >= 0 && t[end] == '?') "Pray tell, $rest"
+            else open + if (open.endsWith("! ")) rest.replaceFirstChar { it.uppercaseChar() } else rest
+        }
+        // And a royal closing, when it's a statement.
+        if (!t.contains('?')) {
+            t = t.trimEnd().let { if (it.last() in ".!") it else "$it." } +
+                listOf(" So We decree.", " Let it be known.", " Thus speaketh the Crown.", " So be it.")[(pick / 4) % 4]
         }
         return t
     }

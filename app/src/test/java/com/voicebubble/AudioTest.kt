@@ -137,11 +137,15 @@ class DictionaryFixesTest {
 
 class RoyalTest {
     @Test fun instant() {
-        assertEquals("Pray tell, art thou coming to the party? We deem 'tis most fun.",
+        assertEquals("Pray tell, art thou coming to the party? Methinks 'tis most fun.",
             Royal.apply("Are you coming to the party? I think it is very fun."))
-        assertEquals("Good morrow, We thank thee for thy aid.", Royal.apply("Hello, thank you for your help."))
-        assertEquals("Nay, We have no gold.", Royal.apply("No, I have no money."))
-        assertEquals("Verily, We require victuals at once.", Royal.apply("I need food right now."))
+        assertEquals(true, Royal.apply("Hello, thank you for your help.").startsWith("Good morrow, We thank thee for thy aid."))
+        assertEquals(true, Royal.apply("No, I have no money.").startsWith("Nay, We have no gold."))
+        val r = Royal.apply("I need food right now.")
+        assertEquals(true, r.contains("We require victuals at once."))
+        // A royal closing on statements.
+        assertEquals(true, listOf("So We decree.", "Let it be known.", "Thus speaketh the Crown.", "So be it.").any { r.endsWith(it) })
+        assertEquals(true, Royal.apply("Do you want pizza?").contains("thou desirest"))
     }
 
     @Test fun turningCharacterModeOff() {
@@ -310,5 +314,20 @@ class CharacterPromptTest {
     @Test fun storyIsNotYourMessage() {
         val said = "See you at the park"
         assertEquals(false, Ai.keepsMeaning(said, "HEY EVERY BUDDY!! " + "NOW'S YOUR CHANCE TO BE A [[BIG SHOT]]!! ".repeat(6) + "park"))
+    }
+}
+
+class ExamplesTest {
+    @Test fun examples() {
+        assertEquals(2, Characters.examplesFor("Spamton").size)
+        assertEquals(2, Characters.examplesFor("Rouxls Kaard").size)
+        assertEquals(2, Characters.examplesFor(Royal.NAME).size)
+        assertEquals(0, Characters.examplesFor("a pirate").size)
+        assertEquals(0, Characters.examplesFor("Spamton + Sans").size)
+        // Every example keeps the meaning of what was said.
+        listOf("Spamton", "Rouxls Kaard", "Flowey", "Sans", "Papyrus", "Jevil", "Lancer", "Undyne", "Temmie", "Susie",
+            "Ralsei", "Gojo", "Sukuna").forEach { who ->
+            Characters.examplesFor(who).forEach { (q, a) -> assertEquals("$who: $a", true, Ai.keepsMeaning(q, a)) }
+        }
     }
 }
