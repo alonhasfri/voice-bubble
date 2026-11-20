@@ -172,6 +172,7 @@ class BubbleService : Service() {
         view?.skin = skinFor(skinApp)
         view?.animated = prefs.animSkins
         view?.detailed = prefs.skinDetail
+        view?.micOnAll = prefs.micOnAll
         view?.caps = prefs.capsLock
         view?.persona = prefs.persona != null
         styleCapsChip()

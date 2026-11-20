@@ -116,6 +116,9 @@ class BubbleView(context: Context) : View(context) {
     /** Detailed skins (shading, shine, texture, every small part) or Simple ones (flat, big shapes only). */
     var detailed: Boolean = runCatching { Prefs(context).skinDetail }.getOrDefault(true)
         set(v) { field = v; invalidate() }
+    /** Every skin shows the microphone (on a soft dark circle where the skin's own picture would hide it). */
+    var micOnAll: Boolean = runCatching { Prefs(context).micOnAll }.getOrDefault(false)
+        set(v) { field = v; invalidate() }
     /** Animated skins move while idle (off = still pictures, a little less battery). */
     var animated = true
         set(v) { field = v; invalidate() }
@@ -584,11 +587,19 @@ class BubbleView(context: Context) : View(context) {
             return
         }
 
-        if (skin.pattern == "eye") { drawEye(c, cx, cy, r); keepMoving(); return }
-        if (!skin.showMic) return
+        // Skins drawn without the microphone get it on top when "Mic on every skin" is on.
+        val hidesMic = !skin.showMic || skin.pattern in setOf("eye", "savepoint", "soul")
         val pulse = if (animated) 1f + 0.08f * sin(phase() * 4.0).toFloat() else 1f
-        if (skin.pattern == "savepoint") { drawSparkle(c, cx, cy, r * 0.62f * pulse, Color.rgb(255, 225, 70)); keepMoving(); return }
-        if (skin.pattern == "soul") { drawHeart(c, cx, cy + r * 0.05f, r * 0.5f * pulse, Color.rgb(255, 20, 30)); keepMoving(); return }
+        if (skin.pattern == "eye") drawEye(c, cx, cy, r)
+        if (skin.pattern == "savepoint") drawSparkle(c, cx, cy, r * 0.62f * pulse, Color.rgb(255, 225, 70))
+        if (skin.pattern == "soul") drawHeart(c, cx, cy + r * 0.05f, r * 0.5f * pulse, Color.rgb(255, 20, 30))
+        if (hidesMic && !micOnAll) { keepMoving(); return }
+        if (hidesMic) {
+            // A soft dark circle under it, so it shows on any picture.
+            iconFill.color = Color.argb(120, 25, 25, 30)
+            c.drawCircle(cx, cy + oy, r * 0.55f, iconFill)
+            icon.color = Color.WHITE; iconFill.color = Color.WHITE
+        }
 
         // Microphone icon.
         icon.strokeWidth = 2.4f * s

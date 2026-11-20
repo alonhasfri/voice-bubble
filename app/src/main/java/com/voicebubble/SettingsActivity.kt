@@ -16,6 +16,8 @@ class SettingsActivity : Screen() {
         page.addView(Ui.sectionTitle(this, "Floating microphone"))
         page.addView(Ui.group(this, listOf(
             Ui.row(this, R.drawable.ui_star, "gold", "Bubble skin", value = Skins.byId(this, prefs.skin).title) { pickSkin() },
+            Ui.switchRow(this, R.drawable.ui_mic, "blue", "Mic on every skin",
+                "Shows the little microphone on top of every skin, pictures too", prefs.micOnAll) { on -> prefs.micOnAll = on; refreshBubble(); render() },
             Ui.switchRow(this, R.drawable.ui_star, "gold", "Detailed skins",
                 "Shading, shine and every small part. Off: the simple, flat version of each skin", prefs.skinDetail) { on -> prefs.skinDetail = on; refreshBubble(); render() },
             Ui.switchRow(this, R.drawable.ui_spark, "purple", "Animated skins",

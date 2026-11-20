@@ -168,6 +168,10 @@ class Prefs(private val ctx: Context) {
     var quickPhrases: List<String>
         get() = p.getString("quickPhrases", "gg\nbrb\none sec\ntrade?\nlol\nty!\nomw\ngg ez")!!.lines().map { it.trim() }.filter { it.isNotEmpty() }
         set(v) = p.edit().putString("quickPhrases", v.joinToString("\n")).apply()
+    /** The microphone on top of every skin, even the picture ones. */
+    var micOnAll: Boolean
+        get() = p.getBoolean("micOnAll", false)
+        set(v) = p.edit().putBoolean("micOnAll", v).apply()
     /** Skins in their detailed look (true) or the simple, flat one (false). */
     var skinDetail: Boolean
         get() = p.getBoolean("skinDetail", true)

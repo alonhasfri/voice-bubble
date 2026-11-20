@@ -212,6 +212,7 @@ class QuickMenu(
         feature(Feature.SOUNDS)
         feature(Feature.VIBRATION)
         toggle("Live text next to the bubble", prefs.liveText) { prefs.liveText = it }
+        toggle("Mic on every skin", prefs.micOnAll) { prefs.micOnAll = it }
         toggle("Detailed skins (off = simple)", prefs.skinDetail) { prefs.skinDetail = it }
         toggle("Animated skins", prefs.animSkins) { prefs.animSkins = it }
         feature(Feature.ONLY_TYPING, "Only while typing")
