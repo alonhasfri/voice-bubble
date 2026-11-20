@@ -158,7 +158,7 @@ Shapes (colours are "#RRGGBB" or "#AARRGGBB"; add "stroke": width to draw only t
         val size = maxOf(w, h)
         // Already fills the bubble and is centred enough: leave it alone.
         if (size >= 62 && Math.abs(cx - 50) < 10 && Math.abs(cy - 50) < 10) return spec
-        val k = if (size < 62 && size > 1) minOf(76.0 / size, 2.5) else 1.0
+        val k = if (size < 62 && size > 1) minOf(76.0 / size, 4.0) else 1.0
         fun X(v: Double) = 50 + (v - cx) * k
         fun Y(v: Double) = 50 + (v - cy) * k
         for (i in 0 until shapes.length()) {
