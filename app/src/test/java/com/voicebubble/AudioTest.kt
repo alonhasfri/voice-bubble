@@ -356,7 +356,8 @@ class SkinDetailTest {
             {"type":"line","x1":10,"y1":10,"x2":12,"y2":12,"width":1,"color":"#000000"},
             {"type":"text","x":50,"y":50,"size":5,"text":"hi","color":"#000000"},]}""")!!
         assertEquals(4, spec.getJSONArray("shapes").length())
-        assertEquals(1, SkinArt.simple(spec).getJSONArray("shapes").length())
+        // So few shapes that it falls back to dropping only the tiniest: the big circle and the text stay.
+        assertEquals(2, SkinArt.simple(spec).getJSONArray("shapes").length())
     }
 
     @Test fun bareDrawingsAreRejected() {

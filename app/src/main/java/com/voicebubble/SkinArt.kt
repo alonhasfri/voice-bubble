@@ -131,22 +131,29 @@ Shapes (colours are "#RRGGBB" or "#AARRGGBB"; add "stroke": width to draw only t
      */
     fun simple(spec: JSONObject): JSONObject = simpleCache.getOrPut(spec) {
         val src = spec.optJSONArray("shapes") ?: JSONArray()
-        val out = JSONArray()
-        for (i in 0 until src.length()) {
-            val s = src.optJSONObject(i) ?: continue
-            val stroke = s.optDouble("stroke", 0.0)
-            val keep = when (s.optString("type")) {
-                "circle" -> s.optDouble("r") >= 4.5 && (stroke == 0.0 || stroke >= 2.5)
-                "ellipse" -> s.optDouble("rx") * s.optDouble("ry") >= 30 && (stroke == 0.0 || stroke >= 2.5)
-                "rect" -> s.optDouble("w") * s.optDouble("h") >= 60
-                "line" -> s.optDouble("width", 2.0) >= 2.5 && Math.hypot(s.optDouble("x2") - s.optDouble("x1"), s.optDouble("y2") - s.optDouble("y1")) >= 14
-                "polygon" -> s.optJSONArray("points")?.let { area(it) >= 50 } ?: false
-                "path" -> stroke == 0.0 || stroke >= 3
-                "text" -> s.optDouble("size") >= 12
-                else -> false
+        fun pick(strict: Boolean): JSONArray {
+            val out = JSONArray()
+            val k = if (strict) 1.0 else 0.35   // how big a part must be to stay
+            for (i in 0 until src.length()) {
+                val s = src.optJSONObject(i) ?: continue
+                val stroke = s.optDouble("stroke", 0.0)
+                val keep = when (s.optString("type")) {
+                    "circle" -> s.optDouble("r") >= 3.5 * k && (stroke == 0.0 || stroke >= 2.0 * k)
+                    "ellipse" -> s.optDouble("rx") * s.optDouble("ry") >= 20 * k && (stroke == 0.0 || stroke >= 2.0 * k)
+                    "rect" -> s.optDouble("w") * s.optDouble("h") >= 50 * k
+                    "line" -> s.optDouble("width", 2.0) >= 2.4 * k && Math.hypot(s.optDouble("x2") - s.optDouble("x1"), s.optDouble("y2") - s.optDouble("y1")) >= 14 * k
+                    "polygon" -> s.optJSONArray("points")?.let { area(it) >= 25 * k } ?: false
+                    "path" -> stroke == 0.0 || stroke >= 1.4 * k
+                    "text" -> s.optDouble("size") >= 12 * k
+                    else -> false
+                }
+                if (keep) out.put(s)
             }
-            if (keep) out.put(s)
+            return out
         }
+        // Too little left (a drawing made of many small parts): leave out only the tiniest.
+        var out = pick(true)
+        if (out.length() < 4 || out.length() < src.length() / 5) out = pick(false)
         JSONObject(spec.toString()).put("shapes", out)
     }
 
