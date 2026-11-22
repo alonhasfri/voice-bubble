@@ -1,6 +1,8 @@
 // Small bridge between the Kotlin app and whisper.cpp.
 #include <jni.h>
+#ifdef __ANDROID__
 #include <android/log.h>
+#endif
 #include <atomic>
 #include <string>
 #include <thread>
@@ -8,7 +10,11 @@
 #include "whisper.h"
 
 #define TAG "VoiceBubble"
+#ifdef __ANDROID__
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
+#else
+#define LOGI(...) ((void) 0)
+#endif
 
 static std::atomic<bool> g_abort{false};
 

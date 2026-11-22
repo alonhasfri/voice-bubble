@@ -96,7 +96,7 @@ add2("isaac_t_lilith","Tainted Lilith","#311B92",sh)
 sh=hd("#9E9E9E","#7E7E7E")+[C(37,50,8,"#FBC02D"),C(63,50,8,"#FBC02D"),C(37,50,8,K,stroke=1.6),C(63,50,8,K,stroke=1.6),T(37,50.5,10,"$",K),T(63,50.5,10,"$",K),E(50,70,10,7,K)]
 for k in range(5): sh.append(L(30+k*10,30,34+k*10,26,K,1.6))
 add2("isaac_t_keeper","Tainted Keeper","#3E2723",sh)
-sh=hd("#A8A8B0","#88889A")+[PA("M 50 52 m -14 0 a 14 14 0 1 1 28 0","#E53935",stroke=3),PA("M 50 52 m -8 0 a 8 8 0 1 1 16 0","#E53935",stroke=2.4)]+ey(tears=None)+mo(70,K)
+sh=hd("#A8A8B0","#88889A")+[PA("M 36 52 C 36 44.3 42.3 38 50 38 C 57.7 38 64 44.3 64 52","#E53935",stroke=3),PA("M 42 52 C 42 47.6 45.6 44 50 44 C 54.4 44 58 47.6 58 52","#E53935",stroke=2.4)]+ey(tears=None)+mo(70,K)
 add2("isaac_t_apollyon","Tainted Apollyon","#1A0A2A",sh)
 sh=[E(50,56,38,30,K),E(50,56,34,26,"#D8D2C8")]+[E(37,54,7,7,K),E(63,54,7,7,K),C(35,52,2,"#FFFFFF"),C(61,52,2,"#FFFFFF"),PA("M 36 70 Q 50 78 64 70",K,stroke=2.4)]
 add2("isaac_t_forgotten","Tainted Forgotten","#4E342E",sh)

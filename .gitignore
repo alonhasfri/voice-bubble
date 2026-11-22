@@ -5,3 +5,6 @@ app/.cxx/
 local.properties
 *.keystore
 app/libs/*.aar
+desktop/build/
+desktop/.gradle/
+desktop/.kotlin/

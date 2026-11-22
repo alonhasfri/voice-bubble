@@ -67,17 +67,101 @@ jobs:
           VERSION_CODE: ${{ env.CODE }}
           VERSION_NAME: voice-${{ env.CODE }}
         run: gradle testBasicDebugUnitTest assembleBasicDebug assembleAutotypeDebug --no-daemon
-      - name: Publish
+      - name: Keep the APKs for the release
         if: steps.key.outputs.signed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/basic/debug/app-basic-debug.apk voice-bubble.apk
           cp app/build/outputs/apk/autotype/debug/app-autotype-debug.apk voice-bubble-autotype.apk
-          # Marked "latest", so this link always gives the newest:
+      - uses: actions/upload-artifact@v4
+        if: steps.key.outputs.signed == 'true'
+        with:
+          name: apks
+          path: |
+            voice-bubble.apk
+            voice-bubble-autotype.apk
+
+  # Voice Bubble for Windows: the same code as the phone app (text tools, characters, AI, dictionary…) with a
+  # Windows bubble, keyboard shortcut and typing. Added to the same release as the APKs.
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.7
+      - name: Version
+        shell: bash
+        run: echo "CODE=$(( ${{ github.run_number }} + 100 ))" >> "$GITHUB_ENV"
+      - name: Speech engine (whisper.cpp as a Windows library)
+        shell: bash
+        run: |
+          cmake -S desktop/native -B nb -A x64 > /dev/null
+          cmake --build nb --config Release -j 4 > nb.log 2>&1 || { tail -60 nb.log; exit 1; }
+          ls -l nb/Release/voicebubble_base.dll
+      - name: Build the app
+        shell: bash
+        env:
+          VERSION_CODE: ${{ env.CODE }}
+        run: gradle -p desktop installDist --no-daemon
+      - name: Package (no Java needed on the PC)
+        shell: bash
+        run: |
+          jpackage --type app-image --name "Voice Bubble" --dest out \
+            --input desktop/build/install/VoiceBubble/lib --main-jar VoiceBubbleDesktop.jar \
+            --main-class com.voicebubble.desktop.MainKt --icon desktop/icon.ico \
+            --app-version "1.0.$CODE" --vendor "Voice Bubble" \
+            --add-modules java.se,jdk.crypto.ec,jdk.unsupported,jdk.charsets,jdk.zipfs,jdk.accessibility,jdk.localedata \
+            --java-options '-Djava.library.path=$APPDIR' --java-options '-Dsun.java2d.uiScale.enabled=true'
+          cp nb/Release/voicebubble_base.dll "out/Voice Bubble/app/"
+          printf 'Voice Bubble for Windows\r\n\r\n1. Double-click "Voice Bubble.exe".\r\n   If Windows says "Windows protected your PC": More info, then Run anyway.\r\n2. Download a speech model in the window that opens (Turbo fast is a good start).\r\n3. Click where you want to type, press Ctrl+Shift+Space (or click the bubble), talk, press it again.\r\n' > "out/Voice Bubble/READ ME.txt"
+          cd out && 7z a -tzip ../VoiceBubble-Windows.zip "Voice Bubble" > /dev/null && cd ..
+          ls -l VoiceBubble-Windows.zip
+      - name: Installer (optional)
+        continue-on-error: true
+        shell: bash
+        run: |
+          jpackage --type exe --app-image "out/Voice Bubble" --name "Voice Bubble" --dest inst \
+            --app-version "1.0.$CODE" --vendor "Voice Bubble" \
+            --win-per-user-install --win-shortcut --win-menu --win-dir-chooser \
+            --win-upgrade-uuid 5f0c6a3e-7d1b-4d7e-9a51-3c2b8e6f9a10
+          cp inst/*.exe VoiceBubble-Setup.exe
+          ls -l VoiceBubble-Setup.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            VoiceBubble-Windows.zip
+            VoiceBubble-Setup.exe
+          if-no-files-found: warn
+
+  # One release with everything, marked Latest (phones and PCs look for updates there).
+  # Only when the APKs were built and signed; the Windows files are added when they built.
+  publish:
+    needs: [build, windows]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ ! -f dl/apks/voice-bubble-autotype.apk ]; then echo "::warning::Not signed: nothing published"; exit 0; fi
+          CODE=$(( ${{ github.run_number }} + 100 ))
+          files="dl/apks/voice-bubble.apk dl/apks/voice-bubble-autotype.apk"
+          for f in dl/windows/VoiceBubble-Windows.zip dl/windows/VoiceBubble-Setup.exe; do [ -f "$f" ] && files="$files $f"; done
+          # Marked "latest", so these links always give the newest:
           # https://github.com/alonhasfri/voice-bubble/releases/latest/download/voice-bubble-autotype.apk
-          gh release create "voice-bubble-$CODE" voice-bubble.apk voice-bubble-autotype.apk \
+          # https://github.com/alonhasfri/voice-bubble/releases/latest/download/VoiceBubble-Setup.exe
+          gh release create "voice-bubble-$CODE" $files \
             --target "${{ github.sha }}" \
             --title "Voice Bubble build $CODE" \
-            --notes "Voice Bubble: floating microphone, on-device speech to text. On your phone, tap voice-bubble-autotype.apk to install (types for you; Play Protect may warn). voice-bubble.apk copies the text instead and installs with no warning." \
+            --notes "Voice Bubble: floating microphone, on-device speech to text. Phone: tap voice-bubble-autotype.apk to install (types for you; Play Protect may warn). voice-bubble.apk copies the text instead. Windows: VoiceBubble-Setup.exe installs it (or unzip VoiceBubble-Windows.zip and run Voice Bubble.exe)." \
             --latest
