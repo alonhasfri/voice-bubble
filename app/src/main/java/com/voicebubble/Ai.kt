@@ -217,7 +217,12 @@ object Ai {
             "names; drop extra words and side details. One message, not several.", max)
 
     /** Designs a bubble skin from a description: a small drawing as JSON (see [SkinArt]). */
-    fun designSkin(c: Context, description: String): String = ask(c, SkinArt.AI_FORMAT, SkinArt.request(description),
+    fun designSkin(c: Context, description: String): String = ask(c, SkinArt.AI_FORMAT, SkinArt.request(description) +
+        // Looked up on the fan wikis first (Deltarune, Undertale, JJK, Isaac), so a character looks like them.
+        (runCatching { WikiResearch.lookup(description) }.getOrNull()?.let {
+            "\n\nWhat the wiki says about it (draw from this: its colours, shapes and signature features, as your own simple " +
+                "drawing that fills the bubble):\n$it"
+        } ?: ""),
         longAnswer = true,
         // Of the free AIs drawing at once, the first proper drawing wins (not just the fastest answer).
         accept = { SkinArt.parseSpec(it, minShapes = 8) != null },

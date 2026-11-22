@@ -396,3 +396,10 @@ class JevilFixTest {
         assertEquals("I like Jevil", Words.applyDictionary("I like jevil", listOf("Jevil")))
     }
 }
+
+class WikiCleanTest {
+    @Test fun wikiMarkupToText() {
+        val t = WikiResearch.clean("=== Appearance ===\n[[File:J.gif|thumb]]\n'''Jevil''' is a short imp with a [[wikipedia:Ruff|ruff]].<ref>x</ref> {{cite}}")
+        assertEquals("Jevil is a short imp with a ruff.", t)
+    }
+}
