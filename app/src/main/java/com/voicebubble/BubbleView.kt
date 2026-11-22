@@ -543,7 +543,8 @@ class BubbleView(context: Context) : View(context) {
             }
         }
         if (state == State.IDLE) drawPattern(c, cx, cy, r)
-        if (state == State.IDLE && detailed && skin.pattern != "image") drawDetail(c, cx, cy, r)
+        // Drawn characters keep their clean sticker look: no shading or gloss over the face.
+        if (state == State.IDLE && detailed && skin.pattern != "image" && !(skin.pattern == "art" && skin.category == "characters")) drawDetail(c, cx, cy, r)
         if (moving) {
             ring.color = Color.WHITE
             ring.strokeWidth = 2.5f * d
