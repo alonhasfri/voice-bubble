@@ -383,3 +383,16 @@ class SkinFitTest {
         assertEquals(40.0, spec.getJSONArray("shapes").getJSONObject(0).getDouble("r"), 0.01)
     }
 }
+
+class JevilFixTest {
+    @Test fun repeatsCollapse() {
+        assertEquals("I'M KING AND SAN CHAOS", collapseRepeats("I'M KING AND SAN AND SAN AND SAN CHAOS"))
+        assertEquals("Deltarune is fun", collapseRepeats("Deltarune Deltarune Deltarune is fun"))
+        assertEquals("no no", collapseRepeats("no no"))   // twice is fine
+    }
+
+    @Test fun capsStayCaps() {
+        assertEquals("UEE HEE HEE! I'M JEVIL!", Words.applyDictionary("UEE HEE HEE! I'M JEVIL!", listOf("Jevil")))
+        assertEquals("I like Jevil", Words.applyDictionary("I like jevil", listOf("Jevil")))
+    }
+}

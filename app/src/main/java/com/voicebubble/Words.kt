@@ -44,16 +44,23 @@ object Words {
     /** Dictionary words given to Whisper up front, so it already leans towards your spellings. */
     fun prompt(c: Context): String {
         // Your own words first, then the switched-on packs taking turns, so every pack gets a say.
+        // Kept short on purpose: a long list of names makes Whisper start writing those names when they weren't
+        // said ("Deltarune Deltarune Deltarune"). Your words get up to 300 characters, the packs 150 between them.
         val packLists = Packs.enabled(c).map { (it.names + it.hints).toMutableList() }
-        val words = dictionary(c).toMutableList()
-        while (packLists.any { it.isNotEmpty() }) for (l in packLists) if (l.isNotEmpty()) words += l.removeAt(0)
-        if (words.isEmpty()) return ""
+        val packWords = ArrayList<String>()
+        while (packLists.any { it.isNotEmpty() }) for (l in packLists) if (l.isNotEmpty()) packWords += l.removeAt(0)
         val sb = StringBuilder()
-        for (w in words) {
-            if (sb.length + w.length > 600) break
-            if (sb.isNotEmpty()) sb.append(", ")
-            sb.append(w)
+        fun addAll(list: List<String>, budget: Int) {
+            val start = sb.length
+            for (w in list) {
+                if (sb.length - start + w.length > budget) break
+                if (sb.isNotEmpty()) sb.append(", ")
+                sb.append(w)
+            }
         }
+        addAll(dictionary(c), 300)
+        addAll(packWords, 150)
+        if (sb.isEmpty()) return ""
         return sb.append('.').toString()
     }
 
@@ -220,7 +227,12 @@ object Words {
                     if (ok) {
                         val s = window.first().start
                         val e = window.last().end - poss.length
-                        if (text.substring(s, e) != entry) reps += Rep(s, e, entry)
+                        // In ALL CAPS text the word stays in capitals (Jevil's "I'M JEVIL", not "I'M Jevil").
+                        val heard = text.substring(s, e)
+                        val shout = heard.count { it.isLetter() } >= 2 && heard.none { it.isLowerCase() } &&
+                            text.count { it.isUpperCase() } > text.count { it.isLowerCase() }
+                        val out = if (shout) entry.uppercase() else entry
+                        if (heard != out) reps += Rep(s, e, out)
                         for (j in i until i + k) used[j] = true
                         i += k
                     } else i++

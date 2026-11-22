@@ -130,9 +130,13 @@ object Ai {
         var out = clean(ask(c, system, user(""), accept = keeps, careful = true, shots = shots))
         // The AI said its own thing instead of your message: once more, firmly.
         if (!keepsMeaning(text, out)) {
+            // The words it must keep, spelled out (free AIs follow a list better than "keep the meaning").
+            val must = text.split(Regex("[^\\p{L}\\p{N}']+")).filter { it.length >= 4 && it.lowercase() !in small }.distinct().take(12)
             val again = runCatching { clean(ask(c, system, user("\n\nImportant: your last answer didn't say what the message " +
                 "says. Keep every point of the message, in the same order. Don't replace it with the character's usual " +
-                "lines or catchphrases; rewrite what it says."), accept = keeps, careful = true, shots = shots)) }.getOrNull()
+                "lines or catchphrases; rewrite what it says." + (if (must.isNotEmpty()) " Your answer must use these words " +
+                "from the message (in the character's spelling is fine): ${must.joinToString(", ")}." else "")),
+                accept = keeps, careful = true, shots = shots)) }.getOrNull()
             // Still not your message: nothing random gets typed.
             out = again?.takeIf { keepsMeaning(text, it) } ?: throw MeaningLost()
         }
