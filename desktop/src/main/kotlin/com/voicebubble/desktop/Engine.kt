@@ -52,8 +52,8 @@ object Engine {
         if (state != State.IDLE) return
         val model = Models.byId(prefs.modelId)
         if (!Models.isDownloaded(ctx, model)) {
-            toast("Download a speech model first (Settings → Speech)")
-            Settings.open(tab = 0)
+            toast("Download a speech model first")
+            MainWindow.open("models")
             return
         }
         try { mic.start() } catch (e: Exception) {
@@ -64,9 +64,29 @@ object Engine {
         set(State.LISTENING)
         // Load the model meanwhile, so it's ready when you stop.
         worker.execute { runCatching { Whisper.ensureLoaded(Models.file(ctx, model).path) } }
+        if (prefs.liveText) startLive(Models.file(ctx, model).path)
     }
 
+    /** Live text: every second or so, what you've said so far is read and shown next to the bubble. */
+    private fun startLive(modelPath: String) {
+        val token = ++liveToken
+        Thread({
+            Thread.sleep(1200)
+            while (state == State.LISTENING && token == liveToken) {
+                val a = mic.snapshot(25)
+                if (hasSpeech(a)) {
+                    val t = runCatching { Whisper.transcribe(modelPath, Audio.trimSilence(a), prefs.lang.takeIf { it != "auto" } ?: "en", "", false, false) }
+                        .getOrNull()?.let { clean(it) }
+                    if (state == State.LISTENING && token == liveToken && !t.isNullOrBlank()) Bubble.showLive((if (mic.seconds > 25) "… " else "") + t)
+                }
+                Thread.sleep(700)
+            }
+        }, "live-text").apply { isDaemon = true; start() }
+    }
+    @Volatile private var liveToken = 0
+
     fun cancel() {
+        liveToken++; Bubble.showLive(null)
         if (state == State.LISTENING) { mic.stop(); set(State.IDLE); toast("Cancelled") }
         else if (state == State.WORKING) { Whisper.abort(); cancelled = true }
     }
@@ -75,13 +95,14 @@ object Engine {
     fun stop() {
         if (state != State.LISTENING) return
         val audio = mic.stop()
+        liveToken++
         Sound.stop()
         if (!hasSpeech(audio)) { set(State.IDLE); toast("Didn't hear anything"); return }
         cancelled = false
         set(State.WORKING)
         worker.execute {
             try { finish(audio) } catch (e: Throwable) { toast("Something went wrong: ${e.message}") }
-            finally { set(State.IDLE) }
+            finally { Bubble.showLive(null); set(State.IDLE); MainWindow.refresh() }
         }
     }
 
@@ -216,6 +237,36 @@ object Engine {
         val bytes = ais.readAllBytes()
         val audio = FloatArray(bytes.size / 2) { i -> ((bytes[2 * i + 1].toInt() shl 8) or (bytes[2 * i].toInt() and 0xFF)).toShort() / 32768f }
         finish(audio)
+    }
+
+    /** A recording (WAV) to text, any length, for "Recording to text". */
+    fun fileToText(file: java.io.File): String {
+        val src = javax.sound.sampled.AudioSystem.getAudioInputStream(file)
+        val f = src.format
+        val pcm = javax.sound.sampled.AudioFormat(f.sampleRate, 16, f.channels, true, false)
+        val bytes = javax.sound.sampled.AudioSystem.getAudioInputStream(pcm, src).readAllBytes()
+        val ch = f.channels.coerceAtLeast(1)
+        val frames = bytes.size / (2 * ch)
+        val mono = FloatArray(frames) { i ->
+            var sum = 0f
+            for (c in 0 until ch) { val k = (i * ch + c) * 2; sum += ((bytes[k + 1].toInt() shl 8) or (bytes[k].toInt() and 0xFF)).toShort() / 32768f }
+            sum / ch
+        }
+        val ratio = f.sampleRate / Mic.RATE
+        val audio = if (Math.abs(ratio - 1f) < 0.001f) mono else FloatArray((mono.size / ratio).toInt()) { i ->
+            val x = i * ratio; val a = x.toInt().coerceAtMost(mono.size - 1); val b = (a + 1).coerceAtMost(mono.size - 1); val t = x - a
+            mono[a] * (1 - t) + mono[b] * t
+        }
+        val model = Models.byId(prefs.modelId)
+        if (!Models.isDownloaded(ctx, model)) return "Download a speech model first."
+        val out = ArrayList<String>()
+        for (p in pieces(audio)) {
+            val trimmed = Audio.trimSilence(p)
+            if (!hasSpeech(trimmed)) continue
+            Whisper.transcribe(Models.file(ctx, model).path, trimmed, if (model.englishOnly) "en" else prefs.lang, out.lastOrNull().orEmpty().takeLast(200), false, false)
+                ?.let { clean(it) }?.takeIf { it.isNotBlank() }?.let { out += it }
+        }
+        return Words.apply(ctx, out.joinToString(" ")).ifBlank { "No speech found in that recording." }
     }
 
     private fun deliver(text: String) {

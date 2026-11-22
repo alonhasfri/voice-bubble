@@ -21,12 +21,15 @@ object Win {
             while (true) {
                 runCatching {
                     val h = User32.INSTANCE.GetForegroundWindow()
-                    if (h != null && pidOf(h) != ourPid) target = h
+                    // Not our own bubble or messages; our main window is fine (its "Try it" box).
+                    if (h != null && (pidOf(h) != ourPid || com.sun.jna.Pointer.nativeValue(h.pointer) == mainWindowId())) target = h
                 }
                 Thread.sleep(200)
             }
         }, "window-tracker").apply { isDaemon = true }.start()
     }
+
+    private fun mainWindowId(): Long = runCatching { MainWindow.frameRef?.let { if (it.isDisplayable) Native.getComponentID(it) else 0L } ?: 0L }.getOrDefault(0L)
 
     private fun pidOf(h: HWND): Int {
         val pid = IntByReference()
@@ -71,5 +74,4 @@ object Win {
         }.getOrNull()
     }
 
-    @Suppress("unused") private val keepJna = Native::class
 }

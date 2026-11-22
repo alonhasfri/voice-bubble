@@ -93,14 +93,36 @@ object Bubble {
         panel.repaint()
     }
 
+    /** What you're saying, next to the bubble (Live text). */
+    private var liveWin: JWindow? = null
+    private var liveTxt: Txt? = null
+    fun showLive(text: String?) = SwingUtilities.invokeLater {
+        if (text.isNullOrBlank() || !App.prefs.liveText) { liveWin?.dispose(); liveWin = null; return@invokeLater }
+        val pal = Theme.p
+        val w = liveWin ?: JWindow().also { lw ->
+            lw.isAlwaysOnTop = true; lw.focusableWindowState = false; lw.type = java.awt.Window.Type.UTILITY
+            lw.background = Color(0, 0, 0, 0)
+            val t = Txt("", 14f, pal.ink, false, maxLines = 4)
+            lw.contentPane = Col(java.awt.Insets(10, 14, 10, 14), bg = pal.card, radius = 16, stroke = pal.border).apply { add(t) }
+            liveTxt = t; liveWin = lw
+        }
+        liveTxt?.text = text.takeLast(220)
+        val c = w.contentPane as Col
+        w.setSize(320, c.hfw(320))
+        val sc = Toolkit.getDefaultToolkit().screenSize
+        val left = win.x - 330 >= 0
+        w.setLocation(if (left) win.x - 326 else win.x + win.width + 6, (win.y + win.height / 2 - w.height / 2).coerceIn(4, sc.height - w.height - 4))
+        if (!w.isVisible) w.isVisible = true
+        c.revalidate(); c.repaint()
+    }
+
     private fun skinArt(): BufferedImage {
         val skin = DeskSkins.byId(App.prefs.skin)
-        val key = "${skin.id}/$size/${App.prefs.micOnAll}"
+        val key = "${skin.id}/$size/${App.prefs.micOnAll}/${App.prefs.skinDetail}"
         art?.takeIf { artKey == key }?.let { return it }
         val img = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
         val g = img.createGraphics()
-        SkinPainter.paint(g, skin.spec, size)
-        if (DeskSkins.showsMic(skin)) SkinPainter.mic(g, size, SkinPainter.color(skin.spec?.opt("mic"), Color.WHITE))
+        DeskSkins.paint(g, skin, size)
         g.dispose()
         art = img; artKey = key
         return img
@@ -112,7 +134,13 @@ object Bubble {
         // Soft shadow.
         g.color = Color(0, 0, 0, 50); g.fill(Ellipse2D.Double(p - 2, p + 2, s + 4, s + 4))
         when (Engine.state) {
-            Engine.State.IDLE -> g.drawImage(skinArt(), PAD, PAD, null)
+            Engine.State.IDLE -> {
+                DeskSkins.byId(App.prefs.skin).spec?.opt("glow")?.let { gl ->
+                    if (gl is String) { val c = SkinPainter.color(gl, Color.WHITE)
+                        for (k in 1..4) { g.color = Color(c.red, c.green, c.blue, 34 - k * 7); g.fill(Ellipse2D.Double(p - k * 1.6, p - k * 1.6, s + k * 3.2, s + k * 3.2)) } }
+                }
+                g.drawImage(skinArt(), PAD, PAD, null)
+            }
             Engine.State.LISTENING -> {
                 val pulse = (Engine.level * 6).coerceIn(0f, 1f)
                 g.color = Color(229, 57, 53, (90 + 120 * pulse).toInt())
@@ -165,16 +193,22 @@ object Bubble {
         (App.prefs.recentPersonas + Characters.presets).distinct().take(30).forEach { who ->
             talk.add(item(who) { App.prefs.persona = who; refresh(); Toast.show("Talking like $who") })
         }
-        talk.add(item("Someone else…") { Settings.open(tab = 1) })
+        talk.add(item("More…") { MainWindow.pickPersona() })
         m.add(talk)
         val tr = JMenu("Translate into…")
         tr.add(item("✕ Off") { App.prefs.translateTo = null; refresh(); Toast.show("Translation off") })
         listOf("English", "Hebrew", "Spanish", "French", "German", "Italian", "Portuguese", "Arabic", "Russian", "Japanese", "Korean", "Chinese")
             .forEach { l -> tr.add(item(l) { App.prefs.translateTo = l; refresh(); Toast.show("Translating into $l") }) }
         m.add(tr)
+        if (App.prefs.quickPhrases.isNotEmpty()) {
+            val qp = JMenu("Quick phrases")
+            App.prefs.quickPhrases.forEach { ph -> qp.add(item(ph) { Engine.typeReply(ph) }) }
+            m.add(qp)
+        }
         m.addSeparator()
-        m.add(item("⚙  Settings") { Settings.open() })
-        m.add(item("Hide the bubble (shortcut still works)") { setVisible(false); Toast.show("Bubble hidden. Bring it back from the tray icon") })
+        m.add(item("Open Voice Bubble") { MainWindow.open("home") })
+        m.add(item("⚙  Settings") { MainWindow.open("settings") })
+        m.add(item("Hide the bubble (shortcut still works)") { setVisible(false); MainWindow.refresh(); Toast.show("Bubble hidden. Bring it back from the tray icon") })
         m.add(item("Quit Voice Bubble") { Main.quit() })
         m.show(e.component, e.x, e.y)
     }
@@ -194,10 +228,15 @@ object Toast {
     fun show(msg: String) = SwingUtilities.invokeLater {
         win?.dispose(); hide?.stop()
         val w = JWindow(); w.isAlwaysOnTop = true; w.focusableWindowState = false; w.type = java.awt.Window.Type.UTILITY
-        val l = JLabel("<html><div style='width:${if (msg.length > 40) 260 else 0}px'>${msg.replace("<", "&lt;")}</div></html>")
-        l.foreground = Color.WHITE; l.font = Font(Font.SANS_SERIF, Font.PLAIN, 13)
-        val p = JPanel(); p.background = Color(32, 34, 44); p.border = BorderFactory.createEmptyBorder(8, 12, 8, 12); p.add(l)
-        w.contentPane = p; w.pack()
+        val pal = Theme.p
+        w.background = Color(0, 0, 0, 0)
+        val card = Row(java.awt.Insets(10, 14, 10, 16), 10, if (Theme.dark) pal.card else Color(0x1A1F33), 16)
+        card.add(Ico("ui_mic", 18, Color(0xA9BBFF)), 0f)
+        val t = Txt(msg, 14f, Color.WHITE, false)
+        card.add(t, 1f)
+        val w0 = (t.naturalWidth() + 60).coerceIn(160, 360)
+        w.contentPane = card
+        w.setSize(w0, card.hfw(w0))
         val a = Bubble.anchor()
         val sc = Toolkit.getDefaultToolkit().screenSize
         w.setLocation((a.x - w.width / 2).coerceIn(4, sc.width - w.width - 4), (a.y - w.height - 6).coerceAtLeast(4))
@@ -212,17 +251,19 @@ object Choices {
     fun show(options: List<String>, title: String) = SwingUtilities.invokeLater {
         win?.dispose()
         val w = JWindow(); w.isAlwaysOnTop = true; w.focusableWindowState = false
-        val p = JPanel(); p.layout = BoxLayout(p, BoxLayout.Y_AXIS)
-        p.background = Color(32, 34, 44); p.border = BorderFactory.createEmptyBorder(10, 10, 10, 10)
-        p.add(JLabel(title).apply { foreground = Color(200, 205, 230) })
+        val pal = Theme.p
+        w.background = Color(0, 0, 0, 0)
+        val card = Col(java.awt.Insets(14, 14, 14, 14), 8, pal.card, 18, pal.border)
+        card.add(Txt(title, 13f, pal.muted, true))
         options.forEach { o ->
-            p.add(JButton("<html><div style='width:280px'>${o.replace("<", "&lt;").replace("\n", "<br>")}</div></html>").apply {
-                horizontalAlignment = JButton.LEFT
-                addActionListener { w.dispose(); Engine.typeReply(o) }
+            card.add(Col(java.awt.Insets(10, 12, 10, 12), bg = pal.accentSoft, radius = 14).apply {
+                add(Txt(o, 14f, pal.ink, false)); hoverRadius = 14
+                onClick = { w.dispose(); Engine.typeReply(o) }
             })
         }
-        p.add(JButton("✕ Close").apply { addActionListener { w.dispose() } })
-        w.contentPane = p; w.pack()
+        card.add(Row(gap = 0).apply { add(Gap(1), 1f); add(K.button("Close", "ui_x", pal.track, pal.ink, 36) { w.dispose() }, 0f) })
+        w.contentPane = card
+        w.setSize(360, card.hfw(360))
         val a = Bubble.anchor()
         val sc = Toolkit.getDefaultToolkit().screenSize
         w.setLocation((a.x - w.width / 2).coerceIn(4, sc.width - w.width - 4), (a.y - w.height - 6).coerceAtLeast(4))

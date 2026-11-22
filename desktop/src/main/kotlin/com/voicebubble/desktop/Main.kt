@@ -10,12 +10,12 @@ import java.awt.TrayIcon
 import java.awt.image.BufferedImage
 import java.io.File
 import java.io.RandomAccessFile
-import javax.swing.JOptionPane
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
+    Main.startedByWindows = "--startup" in args
     val i = args.indexOf("--transcribe")
     if (i >= 0) {
         Engine.dryRun = { println("TYPED: $it") }
@@ -24,10 +24,14 @@ fun main(args: Array<String>) {
         exitProcess(0)
     }
     Main.run()
-    args.indexOf("--settings").takeIf { it >= 0 }?.let { Settings.open(args.getOrNull(it + 1)?.toIntOrNull() ?: 0) }
+    args.indexOf("--open").takeIf { it >= 0 }?.let { MainWindow.open(args.getOrNull(it + 1)) }
+    // For checking the look: "--pick translate" opens that picker.
+    if ("--pick" in args) javax.swing.Timer(1500) { MainWindow.pickTranslate() }.apply { isRepeats = false; start() }
 }
 
 object Main {
+    private const val PORT = 47613
+    var startedByWindows = false
     var icon: Image? = null; private set
     private var tray: TrayIcon? = null
 
@@ -35,9 +39,17 @@ object Main {
         // Only one Voice Bubble at a time: a second start just opens Settings of the first one.
         val lock = runCatching { RandomAccessFile(File(App.filesDir, "running.lock"), "rw").channel.tryLock() }.getOrNull()
         if (lock == null) {
-            JOptionPane.showMessageDialog(null, "Voice Bubble is already running: look for its icon by the clock (bottom-right).")
+            // Already running: open its window instead.
+            runCatching { java.net.Socket("127.0.0.1", PORT).use { it.getOutputStream().write("open\n".toByteArray()) } }
             exitProcess(0)
         }
+        Thread({
+            runCatching {
+                java.net.ServerSocket(PORT, 4, java.net.InetAddress.getLoopbackAddress()).use { server ->
+                    while (true) server.accept().use { MainWindow.open("home") }
+                }
+            }
+        }, "open-listener").apply { isDaemon = true; start() }
         runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
         icon = BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB).also { img ->
             val g = img.createGraphics()
@@ -56,17 +68,18 @@ object Main {
 
         if (!App.firstRunDone || Models.all.none { Models.isDownloaded(App, it) }) {
             App.firstRunDone = true
+            MainWindow.open("home")
             SwingUtilities.invokeLater {
-                JOptionPane.showMessageDialog(null, "<html><b>Welcome to Voice Bubble!</b><br><br>" +
-                    "1. Download a speech model (next window, Speech tab). Turbo fast is a good start.<br>" +
-                    "2. Click where you want to type (Discord, Chrome, Word, a game chat…).<br>" +
-                    "3. Press <b>${Hotkey.pretty(App.hotkey)}</b> or click the bubble, talk, then press it again.<br>" +
-                    "&nbsp;&nbsp;&nbsp;Your words are typed for you.<br><br>" +
-                    "Right-click the bubble for characters and translation. Esc cancels.<br>" +
-                    "Your AI key (for characters, rewrite, translate) goes in the AI tab.</html>",
-                    "Voice Bubble", JOptionPane.INFORMATION_MESSAGE)
-                Settings.open(tab = 0)
+                Dlg.show("Welcome to Voice Bubble!",
+                    "1. Download the speech model (Home → Download the speech model). Turbo fast is a good start.\n" +
+                    "2. Click where you want to type: Discord, Chrome, Word, a game chat…\n" +
+                    "3. Press ${Hotkey.pretty(App.hotkey)} or click the bubble, talk, then press it again. Your words are typed for you.\n\n" +
+                    "Right-click the bubble for characters, translation and quick phrases. Esc cancels. " +
+                    "Your AI key (characters, rewrite, translate) goes under the gear → AI.",
+                    buttons = listOf(Dlg.Btn("Let's go", true)), width = 440)
             }
+        } else if (System.getProperty("jpackage.app-path") != null && !startedByWindows) {
+            MainWindow.open("home")
         } else {
             Toast.show("Voice Bubble is on: ${Hotkey.pretty(App.hotkey)} to talk")
         }
@@ -80,12 +93,13 @@ object Main {
         menu.add(item("Talk / stop (${Hotkey.pretty(App.hotkey)})") { Thread { Engine.toggle() }.start() })
         menu.add(item("Show the bubble") { Bubble.setVisible(true) })
         menu.add(item("Hide the bubble") { Bubble.setVisible(false) })
-        menu.add(item("Settings") { Settings.open() })
+        menu.add(item("Open Voice Bubble") { MainWindow.open("home") })
+        menu.add(item("Settings") { MainWindow.open("settings") })
         menu.addSeparator()
         menu.add(item("Quit") { quit() })
         val t = TrayIcon(icon!!.getScaledInstance(16, 16, Image.SCALE_SMOOTH), "Voice Bubble", menu)
         t.isImageAutoSize = true
-        t.addActionListener { Settings.open() }
+        t.addActionListener { MainWindow.open("home") }
         runCatching { SystemTray.getSystemTray().add(t); tray = t }
     }
 
@@ -115,7 +129,7 @@ object Main {
         if (!App.isWindows) return
         val path = exe ?: run { Toast.show("Only works in the installed app"); return }
         runCatching {
-            if (on) ProcessBuilder("reg", "add", RUN, "/v", "VoiceBubble", "/t", "REG_SZ", "/d", "\"$path\"", "/f").start().waitFor()
+            if (on) ProcessBuilder("reg", "add", RUN, "/v", "VoiceBubble", "/t", "REG_SZ", "/d", "\"$path\" --startup", "/f").start().waitFor()
             else ProcessBuilder("reg", "delete", RUN, "/v", "VoiceBubble", "/f").start().waitFor()
         }
         Toast.show(if (on) "Starts with Windows ✓" else "Won't start with Windows")

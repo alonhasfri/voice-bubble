@@ -22,7 +22,8 @@ Full history, decisions and to-dos: `memory/MEMORY-BOOK.md` in the private repo
   `android.content.Context`/`SharedPreferences` stand-in. Keep those shared files free of other Android APIs (Android-only
   drawing for skins lives in `SkinDraw.kt`). whisper.cpp is built as `voicebubble_base.dll` from `desktop/native`.
   Bubble = always-on-top window, Ctrl+Shift+Space hotkey (JNativeHook), types by clipboard + Ctrl+V (JNA tracks the
-  target window). `VoiceBubble --transcribe file.wav` prints the result (handy for testing on Linux with xvfb).
+  target window). The window copies the phone's design (Ui.kt) with its own painted kit (`Kit.kt`, `Theme.kt`, the phone's
+  `ui_*.xml` icons via `Icons.kt`), never system-looking Swing. `VoiceBubble --transcribe file.wav` prints the result (handy for testing on Linux with xvfb); `--open home2|skins|settings…` opens a screen for screenshots.
   Downloads: `releases/latest/download/VoiceBubble-Setup.exe` (installer) and `VoiceBubble-Windows.zip`.
 - Processing order: voice commands → emoji by name → filler remover → numbers & dates → style per
   app → dictionary/word packs → shortcuts → AI fixes mistakes → character → translation →

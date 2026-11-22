@@ -63,6 +63,12 @@ class Mic {
 
     val seconds get() = size / RATE.toFloat()
 
+    /** What's been heard so far (the last [maxSec] seconds), while still listening. */
+    fun snapshot(maxSec: Int): FloatArray = synchronized(this) {
+        val from = (size - RATE * maxSec).coerceAtLeast(0)
+        samples.copyOfRange(from, size)
+    }
+
     /** Stops and gives the recording. */
     fun stop(): FloatArray {
         running = false

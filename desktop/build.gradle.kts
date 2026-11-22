@@ -19,7 +19,12 @@ sourceSets {
             include("android/**", "com/voicebubble/desktop/**", "com/voicebubble/shared/**")
             shared.forEach { include("com/voicebubble/$it.kt") }
         }
-        resources { srcDir("../app/src/main/assets") }
+        resources {
+            srcDir("../app/src/main/assets")
+            // The phone's line icons (Android vector files), drawn by Icons.kt.
+            srcDir("../app/src/main/res")
+            exclude("mipmap*/**", "values*/**", "xml/**", "layout/**", "drawable/ic_*")
+        }
     }
 }
 
