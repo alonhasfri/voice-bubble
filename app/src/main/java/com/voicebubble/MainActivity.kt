@@ -35,6 +35,8 @@ fun pickLimit(a: android.app.Activity, pkg: String? = null, done: () -> Unit) {
 }
 
 class MainActivity : Screen() {
+    companion object { private var homeTab = 0 }
+
 
     private var update: Updates.Release? = null
     private var statusLine: TextView? = null
@@ -73,31 +75,103 @@ class MainActivity : Screen() {
             page.addView(setupCard(steps), Ui.lp(this, 14))
         }
 
-        page.addView(Ui.sectionTitle(this, "Quick settings"))
-        page.addView(quickSettings())
-
-        page.addView(Ui.sectionTitle(this, "Writing helpers"))
-        page.addView(helpers())
-        page.addView(commandsCard(), Ui.lp(this, 12))
-
-        page.addView(Ui.sectionTitle(this, "Your numbers"))
-        page.addView(statsRow())
-
-        page.addView(Ui.sectionTitle(this, "Try it"))
-        page.addView(tryCard())
-
-        page.addView(Ui.sectionTitle(this, "Recent"))
-        page.addView(Ui.group(this, listOf(Ui.row(this, R.drawable.ui_book, "teal", "Search all history",
-            sub = "Find anything you dictated") { startActivity(Intent(this, HistoryActivity::class.java)) },
-            Ui.row(this, R.drawable.ui_mic, "purple", "Recording to text",
-                sub = "Voice messages or long recordings (an hour is fine), or translate them") { startActivity(Intent(this, VoiceNoteActivity::class.java)) })))
-        page.addView(recent(), Ui.lp(this, 12))
+        // One short page at a time instead of one long scroll.
+        page.addView(Ui.segmented(this, listOf("Main", "Writing", "Options", "Activity"), homeTab) { i -> homeTab = i; render() }, Ui.lp(this, 16))
+        when (homeTab) {
+            0 -> {
+                page.addView(tiles(), Ui.lp(this, 14))
+                page.addView(Ui.sectionTitle(this, "Try it"))
+                page.addView(tryCard())
+            }
+            1 -> {
+                page.addView(Ui.sectionTitle(this, "Writing helpers"))
+                page.addView(helpers())
+                page.addView(commandsCard(), Ui.lp(this, 12))
+            }
+            2 -> {
+                page.addView(Ui.sectionTitle(this, "Options"))
+                page.addView(quickSettings())
+                page.addView(Ui.note(this, "Everything else is under the gear at the top. Tip: swipe down on the bubble for the quick menu.")
+                    .apply { setPaddingRelative(dp(6), dp(12), dp(6), 0) })
+            }
+            else -> {
+                page.addView(Ui.sectionTitle(this, "Your numbers"))
+                page.addView(statsRow())
+                page.addView(Ui.sectionTitle(this, "Recent"))
+                page.addView(recent())
+            }
+        }
 
         Ui.tabScreen(this, page, "home")
         updateStatusLine()
     }
 
     // ----- floating microphone -----
+
+    /** The things you use most, as big tiles (two to a row). */
+    private fun tiles(): View {
+        val prefs = Prefs(this)
+        val model = if (prefs.engine == "live") Live.byId(prefs.liveModelId).title else Models.byId(prefs.modelId).title.substringBefore(" (")
+        val items = listOf(
+            Tile(R.drawable.ui_user, "orange", "Talk like", prefs.persona ?: "Normal") { pickPersona() },
+            Tile(R.drawable.ui_star, "gold", "Bubble skin", Skins.byId(this, prefs.skin).title) { startActivity(Intent(this, SkinsActivity::class.java)) },
+            Tile(R.drawable.ui_globe, "purple", "Translate", prefs.translateTo ?: "Off") { pickTranslate() },
+            Tile(R.drawable.ui_wand, "blue", "AI length", Ai.lengthName(prefs.aiLength).substringBefore(" (")) { pickLength() },
+            Tile(R.drawable.ui_download, "green", "Speech model", model) { startActivity(Intent(this, ModelActivity::class.java)) },
+            Tile(R.drawable.ui_zap, "red", "Quick phrases", "${prefs.quickPhrases.size} phrases") { editQuickPhrases() },
+            Tile(R.drawable.ui_mic, "purple", "Recording to text", "Voice notes, 1 hour+") { startActivity(Intent(this, VoiceNoteActivity::class.java)) },
+            Tile(R.drawable.ui_book, "teal", "History", "Search everything") { startActivity(Intent(this, HistoryActivity::class.java)) },
+        )
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        items.chunked(2).forEachIndexed { r, pair ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            pair.forEachIndexed { i, t ->
+                val card = Ui.card(this).apply {
+                    setPaddingRelative(dp(14), dp(14), dp(14), dp(14))
+                    minimumHeight = dp(104)
+                    addView(Ui.tile(this@MainActivity, t.icon, t.tone, 34, 19))
+                    addView(Ui.text(this@MainActivity, t.title, 15f, p.ink).apply { setPaddingRelative(0, dp(10), 0, 0); maxLines = 1 })
+                    addView(Ui.text(this@MainActivity, t.value, 13f, p.muted, bold = false).apply {
+                        maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; setPaddingRelative(0, dp(2), 0, 0)
+                    })
+                    isClickable = true; isFocusable = true
+                    contentDescription = "${t.title}, ${t.value}"
+                    Ui.ripple(this@MainActivity, this)
+                    setOnClickListener { t.open() }
+                }
+                row.addView(card, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { if (i > 0) marginStart = dp(12) })
+            }
+            col.addView(row, Ui.lp(this, if (r == 0) 0 else 12))
+        }
+        return col
+    }
+
+    private class Tile(val icon: Int, val tone: String, val title: String, val value: String, val open: () -> Unit)
+
+    private fun pickTranslate() {
+        val langs = listOf(null, "English", "Hebrew", "Spanish", "French", "German", "Arabic", "Russian", "Portuguese", "Italian", "Japanese")
+        Ui.dialog(this).setTitle("Translate everything into").setItems(langs.map { it ?: "Off" }.toTypedArray()) { _, i ->
+            Prefs(this).translateTo = langs[i]; refreshBubble(); render()
+        }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun pickLength() {
+        val prefs = Prefs(this)
+        val cur = Ai.lengths.indexOfFirst { it.first == prefs.aiLength }.coerceAtLeast(0)
+        Ui.dialog(this).setTitle("How long should AI text be?").setSingleChoiceItems(Ai.lengths.map { it.second }.toTypedArray(), cur) { d, i ->
+            prefs.aiLength = Ai.lengths[i].first; d.dismiss(); render()
+        }.setNegativeButton("Cancel", null).show()
+    }
+
+    private fun editQuickPhrases() {
+        val prefs = Prefs(this)
+        val f = Ui.field(this, "One per line, e.g. gg, brb, trade?", multiLine = true).apply { setText(prefs.quickPhrases.joinToString("\n")) }
+        Ui.dialog(this).setTitle("Quick phrases").setMessage("One per line. Swipe up on the bubble to use them.")
+            .setView(Ui.padded(this, f)).setPositiveButton("Save") { _, _ ->
+                prefs.quickPhrases = f.text.toString().lines().map { it.trim() }.filter { it.isNotEmpty() }.take(12)
+                render()
+            }.setNegativeButton("Cancel", null).show()
+    }
 
     private fun hero(): View {
         val on = BubbleService.running
