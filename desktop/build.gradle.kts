@@ -10,7 +10,7 @@ java { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaV
 // on top of a tiny stand-in for the two Android classes it uses (settings storage).
 val shared = listOf(
     "Adapt", "Ai", "Audio", "Characters", "Clean", "Commands", "Cpu", "Downloader", "Features", "Instant", "Learn",
-    "Limit", "Packs", "Prefs", "RobloxSafe", "Royal", "SkinArt", "Stats", "Styles", "TextTools", "Whisper", "WikiResearch", "Words",
+    "Limit", "Packs", "Prefs", "RobloxSafe", "Royal", "SkinArt", "Stats", "Styles", "TextTools", "Transfer", "Whisper", "WikiResearch", "Words",
 )
 sourceSets {
     main {

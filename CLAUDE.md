@@ -24,6 +24,9 @@ Full history, decisions and to-dos: `memory/MEMORY-BOOK.md` in the private repo
   Bubble = always-on-top window, Ctrl+Shift+Space hotkey (JNativeHook), types by clipboard + Ctrl+V (JNA tracks the
   target window). The window copies the phone's design (Ui.kt) with its own painted kit (`Kit.kt`, `Theme.kt`, the phone's
   `ui_*.xml` icons via `Icons.kt`), never system-looking Swing. `VoiceBubble --transcribe file.wav` prints the result (handy for testing on Linux with xvfb); `--open home2|skins|settings…` opens a screen for screenshots.
+  Phone → computer: `Transfer.kt` (shared). Phone Settings → Move to your computer shows a 16-letter code (Wi-Fi IP +
+  secret); the PC (gear → Move from your phone) fetches straight from the phone on port 47614, AES-GCM with the secret.
+  Long code `VB1:` (gzip+base64) when they can't reach each other. Per-device settings (model, positions…) aren't moved.
   Downloads: `releases/latest/download/VoiceBubble-Setup.exe` (installer) and `VoiceBubble-Windows.zip`.
 - Processing order: voice commands → emoji by name → filler remover → numbers & dates → style per
   app → dictionary/word packs → shortcuts → AI fixes mistakes → character → translation →

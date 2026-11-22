@@ -135,6 +135,13 @@ class SettingsActivity : Screen() {
                 "to download the speech model and to check for updates.").apply { setPaddingRelative(dp(4), dp(8), dp(4), 0) })
 
         // About
+        page.addView(Ui.sectionTitle(this, "Computer"))
+        page.addView(Ui.group(this, listOf(
+            Ui.row(this, R.drawable.ui_share, "blue", "Move to your computer",
+                sub = "Everything to Voice Bubble for Windows with a short code") {
+                startActivity(android.content.Intent(this, TransferActivity::class.java))
+            },
+        )))
         page.addView(Ui.sectionTitle(this, "About"))
         page.addView(Ui.group(this, listOf(
             Ui.row(this, R.drawable.ui_help, "green", "How to use") { help() },

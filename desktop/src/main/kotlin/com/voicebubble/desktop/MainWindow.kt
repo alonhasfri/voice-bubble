@@ -554,6 +554,10 @@ object MainWindow {
 
     private fun settings(page: Page) {
         page.add(K.backHeader("Settings") { go(null) })
+        page.add(K.sectionTitle("Your phone"))
+        page.add(K.group(listOf(
+            K.row("ui_download", "blue", "Move from your phone", sub = "Everything from Voice Bubble on your phone, with a short code") { moveFromPhone() },
+        )))
         page.add(K.sectionTitle("AI"))
         page.add(K.group(listOf(
             K.row("ui_key", "purple", "Your AI key", if (Ai.hasKey(App)) "Saved ✓" else "Not set",
@@ -598,6 +602,32 @@ object MainWindow {
             K.row("ui_x", "red", "Quit Voice Bubble", chevron = false, danger = true) { Main.quit() },
         )))
         page.add(Col(Insets(14, 6, 0, 6)).apply { add(K.note("Your voice is turned into text on this computer. Only AI features send text (never audio) to the AI you picked.")) })
+    }
+
+    /** Phone: Settings → Move to your computer shows a code; it's typed (or the long code pasted) here. */
+    fun moveFromPhone() {
+        Dlg.input("Move from your phone",
+            "On your phone: Voice Bubble → Settings → Move to your computer. Type the code it shows (both on the same Wi-Fi), or paste the long code.",
+            "K7QD-2XMB-9FHT-W3", multi = false) { typed ->
+            val t = typed.trim()
+            if (t.isEmpty()) return@input
+            Toast.show("Getting everything from your phone…")
+            Thread {
+                val result = runCatching {
+                    val data = if (t.startsWith(com.voicebubble.Transfer.LONG_PREFIX) || t.length > 40)
+                        com.voicebubble.Transfer.readLongCode(t) ?: throw IllegalStateException("That long code is incomplete. Copy all of it and try again")
+                    else com.voicebubble.Transfer.receive(com.voicebubble.Transfer.parse(t)
+                        ?: throw IllegalStateException("That isn't a code. It looks like K7QD-2XMB-9FHT-W3 (16 letters and numbers)"))
+                    com.voicebubble.Transfer.import(App, data)
+                }
+                SwingUtilities.invokeLater {
+                    result.onSuccess { n ->
+                        Bubble.refresh(); render()
+                        Dlg.message("Moved ✓", "$n settings came over: your AI key, characters, dictionary, shortcuts, styles, skins, history and what it learned.")
+                    }.onFailure { Dlg.message("Didn't work", it.message ?: "Something went wrong") }
+                }
+            }.start()
+        }
     }
 
     fun browse(url: String) = runCatching { Desktop.getDesktop().browse(URI(url)) }

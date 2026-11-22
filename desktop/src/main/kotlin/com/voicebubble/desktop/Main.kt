@@ -16,6 +16,17 @@ import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     Main.startedByWindows = "--startup" in args
+    // Moving data between two computers (or testing): "--send" shows a code, "--receive CODE" takes it.
+    if ("--send" in args) {
+        val c = com.voicebubble.Transfer.newCode(com.voicebubble.Transfer.localIp() ?: byteArrayOf(127, 0, 0, 1))
+        println("CODE: ${c.text}")
+        com.voicebubble.Transfer.serve(App, c, stop = { false }) { println("SENT") }
+        exitProcess(0)
+    }
+    args.indexOf("--receive").takeIf { it >= 0 }?.let {
+        val n = com.voicebubble.Transfer.import(App, com.voicebubble.Transfer.receive(com.voicebubble.Transfer.parse(args[it + 1])!!))
+        println("IMPORTED $n"); exitProcess(0)
+    }
     val i = args.indexOf("--transcribe")
     if (i >= 0) {
         Engine.dryRun = { println("TYPED: $it") }
@@ -75,7 +86,8 @@ object Main {
                     "2. Click where you want to type: Discord, Chrome, Word, a game chat…\n" +
                     "3. Press ${Hotkey.pretty(App.hotkey)} or click the bubble, talk, then press it again. Your words are typed for you.\n\n" +
                     "Right-click the bubble for characters, translation and quick phrases. Esc cancels. " +
-                    "Your AI key (characters, rewrite, translate) goes under the gear → AI.",
+                    "Your AI key (characters, rewrite, translate) goes under the gear → AI.\n\n" +
+                    "Have Voice Bubble on your phone? Gear → Move from your phone brings everything over with a code.",
                     buttons = listOf(Dlg.Btn("Let's go", true)), width = 440)
             }
         } else if (System.getProperty("jpackage.app-path") != null && !startedByWindows) {
