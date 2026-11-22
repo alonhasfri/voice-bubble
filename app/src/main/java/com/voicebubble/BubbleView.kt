@@ -22,7 +22,11 @@ object Skins {
                val shape: String = "circle", val glow: Int? = null, val pattern: String = "",
                /** Your own skins: an uploaded picture, or the AI's drawing (and whether it keeps the microphone). */
                val image: android.graphics.Bitmap? = null, val art: org.json.JSONObject? = null,
-               val showMic: Boolean = true, val custom: Boolean = false)
+               val showMic: Boolean = true, val custom: Boolean = false,
+               /** Which tab of the skin menu it's in: characters, themes, fun, basic, mine. */
+               val category: String = "basic",
+               /** A character skin's theme version (its colours and items, no face), used for the Simple look. */
+               val artSimple: org.json.JSONObject? = null)
 
     val all = listOf(
         Skin("classic", "Classic", Color.rgb(58, 91, 217)),
@@ -66,25 +70,32 @@ object Skins {
     private val pictures = HashMap<String, android.graphics.Bitmap?>()
 
     /** A skin from a drawing (the AI's, a shared one, or the drawn ones that come with the app). */
-    fun fromSpec(id: String, title: String, spec: org.json.JSONObject, custom: Boolean): Skin {
+    fun fromSpec(id: String, title: String, spec: org.json.JSONObject, custom: Boolean,
+                 category: String = if (custom) "mine" else "fun", theme: org.json.JSONObject? = null): Skin {
         val bg = spec.optJSONArray("background")
         val c1 = SkinArt.color(bg?.opt(0) ?: spec.opt("background"), Color.rgb(58, 91, 217))
         val c2 = bg?.opt(1)?.let { SkinArt.color(it, c1) }
         val mic = spec.opt("mic")
         return Skin(id, title, c1, idle2 = c2, icon = SkinArt.color(mic, Color.WHITE),
             glow = spec.opt("glow")?.let { if (it is String) SkinArt.color(it, Color.WHITE) else null },
-            pattern = "art", art = spec, showMic = mic is String, custom = custom)
+            pattern = "art", art = spec, showMic = mic is String, custom = custom, category = category, artSimple = theme)
     }
 
     /** The built-in skins, the drawn ones that come with the app, and the ones you made. */
-    fun all(c: android.content.Context): List<Skin> = all + SkinArt.builtin(c).map { fromSpec(it.id, it.title, it.spec!!, false) } +
+    /** The original skins that are themed (the rest are "basic"). */
+    private val themedIds = setOf("gojo", "sixeyes", "star", "galaxy", "void", "cursed", "soul", "hollowpurple", "infinity", "domain",
+        "blackflash", "cursedenergy", "savepoint", "bigshot", "cardcastle", "darkfountain", "kromer", "determination")
+
+    fun all(c: android.content.Context): List<Skin> = all.map { s ->
+        if (s.id in themedIds) Skin(s.id, s.title, s.idle, s.idle2, s.icon, s.shape, s.glow, s.pattern, category = "themes") else s
+    } + SkinArt.builtin(c).map { fromSpec(it.id, it.title, it.spec!!, false, it.category, it.theme) } +
         SkinArt.list(c).mapNotNull { cs ->
         when (cs.kind) {
             "image" -> {
                 val bmp = pictures.getOrPut(cs.id) { android.graphics.BitmapFactory.decodeFile(SkinArt.imageFile(c, cs.id).path) }
                     ?: return@mapNotNull null
                 // Your picture with the microphone on top.
-                Skin(cs.id, cs.title, Color.BLACK, pattern = "image", image = bmp, showMic = true, custom = true)
+                Skin(cs.id, cs.title, Color.BLACK, pattern = "image", image = bmp, showMic = true, custom = true, category = "mine")
             }
             "ai" -> cs.spec?.let { fromSpec(cs.id, cs.title, it, true) }
             else -> null
@@ -228,7 +239,16 @@ class BubbleView(context: Context) : View(context) {
             }
             "art" -> skin.art?.let { spec ->
                 c.save(); c.clipPath(shapePath(cx, cy, r))
-                SkinArt.drawShapes(c, if (detailed) spec else SkinArt.simple(spec), cx, cy, r)
+                val theme = skin.artSimple
+                if (!detailed && theme != null) {
+                    // Simple look of a character skin: its theme, on its own background.
+                    val bg = theme.optJSONArray("background")
+                    val c1 = SkinArt.color(bg?.opt(0), skin.idle)
+                    val c2 = bg?.opt(1)?.let { SkinArt.color(it, c1) } ?: c1
+                    pat.shader = LinearGradient(cx - r, cy - r, cx + r, cy + r, c1, c2, Shader.TileMode.CLAMP)
+                    c.drawCircle(cx, cy, r * 1.2f, pat); pat.shader = null
+                    SkinArt.drawShapes(c, theme, cx, cy, r)
+                } else SkinArt.drawShapes(c, if (detailed) spec else SkinArt.simple(spec), cx, cy, r)
                 c.restore()
             }
             "hollowpurple" -> {

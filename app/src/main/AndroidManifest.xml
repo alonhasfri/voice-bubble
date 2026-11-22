@@ -95,6 +95,7 @@
         <activity android:name=".ShortcutsActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".ModelActivity" android:exported="false" />
+        <activity android:name=".SkinsActivity" android:exported="false" />
         <activity android:name=".HistoryActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <!-- Share a voice note to Voice Bubble to have it written out. -->
         <activity android:name=".VoiceNoteActivity" android:exported="true" android:label="Recording to text">

@@ -45,7 +45,8 @@ Shapes (colours are "#RRGGBB" or "#AARRGGBB"; add "stroke": width to draw only t
 {"type":"path","d":"M 20 50 Q 50 20 80 50","color":"#000000","stroke":3}   // SVG path: M L H V Q C Z (also lowercase)
 {"type":"text","x":50,"y":60,"size":30,"text":"★","color":"#FFFFFF"}     // x,y = centre of the text"""
 
-    class Custom(val id: String, val title: String, val kind: String, val spec: JSONObject?)
+    class Custom(val id: String, val title: String, val kind: String, val spec: JSONObject?,
+                 val category: String = "fun", val theme: JSONObject? = null)
 
     /** What the AI is asked (the same wording for the examples and for your request). */
     fun request(description: String) = "Design a bubble skin: ${description.trim()}"
@@ -225,7 +226,9 @@ Shapes (colours are "#RRGGBB" or "#AARRGGBB"; add "stroke": width to draw only t
     /** The drawn skins that come with the app (assets/skins_art.json; made with tools/skins/gen.py). */
     fun builtin(c: Context): List<Custom> = builtinCache ?: runCatching {
         val arr = JSONArray(c.assets.open("skins_art.json").bufferedReader().use { it.readText() })
-        (0 until arr.length()).map { i -> arr.getJSONObject(i).let { Custom(it.getString("id"), it.getString("name"), "ai", it.getJSONObject("spec")) } }
+        (0 until arr.length()).map { i -> arr.getJSONObject(i).let {
+            Custom(it.getString("id"), it.getString("name"), "ai", it.getJSONObject("spec"), it.optString("cat", "fun"), it.optJSONObject("theme"))
+        } }
     }.getOrDefault(emptyList()).also { builtinCache = it }
 
     private val simpleCache = java.util.WeakHashMap<JSONObject, JSONObject>()
