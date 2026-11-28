@@ -75,11 +75,16 @@ android {
             // The speech engine is far too slow without compiler optimisations.
             externalNativeBuild { cmake { arguments += "-DCMAKE_BUILD_TYPE=Release" } }
         }
+        // What's published: a normal (not debuggable) build. Play Protect is much stricter with debug builds.
         release {
             isMinifyEnabled = false
+            isDebuggable = false
             if (hasKeystore) signingConfig = signingConfigs.getByName("app")
+            externalNativeBuild { cmake { arguments += "-DCMAKE_BUILD_TYPE=Release" } }
         }
     }
+    // Lint isn't run on CI's release builds (it would only slow them down or stop them over warnings).
+    lint { checkReleaseBuilds = false; abortOnError = false }
     packaging {
         resources.excludes += listOf("META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*",
             "META-INF/INDEX.LIST", "META-INF/versions/9/module-info.class")

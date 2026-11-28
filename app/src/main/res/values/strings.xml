@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="accessibility_description">Types the words you speak into the text box you have selected, when you tap the Voice Bubble microphone. It does not read, store or send anything else.</string>
+    <string name="accessibility_description">Types the words you speak into the text box you have selected, when you tap the Voice Bubble microphone. It also sees which app is open (for its writing style), and only when you ask for reply suggestions or a summary does it read the chat on screen once. Nothing is stored, and nothing is sent anywhere except to the AI you chose, when you use an AI feature.</string>
 </resources>

@@ -66,12 +66,12 @@ jobs:
         env:
           VERSION_CODE: ${{ env.CODE }}
           VERSION_NAME: voice-${{ env.CODE }}
-        run: gradle testBasicDebugUnitTest assembleBasicDebug assembleAutotypeDebug --no-daemon
+        run: gradle testBasicReleaseUnitTest assembleBasicRelease assembleAutotypeRelease --no-daemon
       - name: Keep the APKs for the release
         if: steps.key.outputs.signed == 'true'
         run: |
-          cp app/build/outputs/apk/basic/debug/app-basic-debug.apk voice-bubble.apk
-          cp app/build/outputs/apk/autotype/debug/app-autotype-debug.apk voice-bubble-autotype.apk
+          cp app/build/outputs/apk/basic/release/app-basic-release.apk voice-bubble.apk
+          cp app/build/outputs/apk/autotype/release/app-autotype-release.apk voice-bubble-autotype.apk
       - uses: actions/upload-artifact@v4
         if: steps.key.outputs.signed == 'true'
         with:
